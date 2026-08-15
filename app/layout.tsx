@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { headers } from "next/headers";
+import PwaRegister from "./pwa-register";
 import "./globals.css";
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -22,7 +23,7 @@ export async function generateMetadata(): Promise<Metadata> {
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="ja" data-scroll-behavior="smooth">
-      <body>{children}</body>
+      <body><PwaRegister />{children}</body>
     </html>
   );
 }
