@@ -1,12 +1,16 @@
 import { randomUUID } from "node:crypto";
 import { google, type sheets_v4 } from "googleapis";
 import { closingMonthKey, isMonthKey, type HouseholdState } from "./state.ts";
+import { parseWishlistItems, type WishlistItem } from "./wishlist.ts";
 
 const LEGACY_SHEET_NAME = "app_state";
 const MONTHLY_SHEET_PREFIX = "state_";
+const WISHLIST_SHEET_NAME = "wishlist";
 const STATE_KEY = "household";
+const WISHLIST_META_KEY = "__meta__";
 const CHUNK_SIZE = 30_000;
 const HEADER = ["key", "chunk_index", "payload_chunk", "updated_at", "revision"];
+const WISHLIST_HEADER = ["id", "name", "category", "amount", "url", "updated_at", "revision"];
 
 export class SheetsConfigurationError extends Error {}
 export class SheetsConflictError extends Error {}
@@ -18,6 +22,13 @@ export interface StateEnvelope {
   revision: string;
   updatedAt: string;
   state: HouseholdState;
+}
+
+export interface WishlistEnvelope {
+  version: 1;
+  revision: string | null;
+  updatedAt: string | null;
+  items: WishlistItem[];
 }
 
 let cachedService: sheets_v4.Sheets | null = null;
@@ -105,6 +116,32 @@ async function ensureStateSheet(service: sheets_v4.Sheets, id: string, sheetName
   });
 }
 
+async function ensureWishlistSheet(service: sheets_v4.Sheets, id: string) {
+  const metadata = await service.spreadsheets.get({
+    spreadsheetId: id,
+    fields: "sheets.properties.title",
+  });
+  const exists = metadata.data.sheets?.some((sheet) => sheet.properties?.title === WISHLIST_SHEET_NAME);
+  if (!exists) {
+    try {
+      await service.spreadsheets.batchUpdate({
+        spreadsheetId: id,
+        requestBody: { requests: [{ addSheet: { properties: { title: WISHLIST_SHEET_NAME } } }] },
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "";
+      if (!message.toLowerCase().includes("already exists")) throw error;
+    }
+  }
+
+  await service.spreadsheets.values.update({
+    spreadsheetId: id,
+    range: `'${WISHLIST_SHEET_NAME}'!A1:G1`,
+    valueInputOption: "RAW",
+    requestBody: { values: [WISHLIST_HEADER] },
+  });
+}
+
 function parseStatePayload(payload: string) {
   const parsed = JSON.parse(payload) as StateEnvelope;
   if ((parsed.version !== 1 && parsed.version !== 2)
@@ -155,6 +192,59 @@ export async function readHouseholdHistory(): Promise<StateEnvelope[]> {
   return envelopes
     .filter((envelope): envelope is StateEnvelope => Boolean(envelope?.closedAt && envelope.monthKey))
     .sort((left, right) => (right.monthKey ?? "").localeCompare(left.monthKey ?? ""));
+}
+
+export async function readWishlist(): Promise<WishlistEnvelope> {
+  const service = sheetsService();
+  const id = spreadsheetId();
+  await ensureWishlistSheet(service, id);
+  const response = await service.spreadsheets.values.get({
+    spreadsheetId: id,
+    range: `'${WISHLIST_SHEET_NAME}'!A2:G`,
+  });
+  const rows = response.data.values ?? [];
+  const metadataRow = rows.find((row) => row[0] === WISHLIST_META_KEY);
+  const revision = metadataRow?.[6] ? String(metadataRow[6]) : null;
+  const updatedAt = metadataRow?.[5] ? String(metadataRow[5]) : null;
+  const items = parseWishlistItems(rows
+    .filter((row) => row[0] !== WISHLIST_META_KEY && row.some((value) => String(value ?? "").trim() !== ""))
+    .map((row) => ({
+      id: String(row[0] ?? ""),
+      name: String(row[1] ?? ""),
+      category: String(row[2] ?? ""),
+      amount: Number(row[3]),
+      url: String(row[4] ?? ""),
+    })));
+  if (items === null) throw new Error("保存された欲しいものリストの形式が不正です。");
+  return { version: 1, revision, updatedAt, items };
+}
+
+export async function writeWishlist(items: WishlistItem[], expectedRevision: string | null) {
+  const service = sheetsService();
+  const id = spreadsheetId();
+  await ensureWishlistSheet(service, id);
+  const current = await readWishlist();
+  if (current.revision !== expectedRevision) {
+    throw new SheetsConflictError("The spreadsheet was updated by another session.");
+  }
+
+  const revision = randomUUID();
+  const updatedAt = new Date().toISOString();
+  const rows = [
+    [WISHLIST_META_KEY, "", "", "", "", updatedAt, revision],
+    ...items.map((item) => [item.id, item.name, item.category, item.amount, item.url, updatedAt, revision]),
+  ];
+  await service.spreadsheets.values.clear({
+    spreadsheetId: id,
+    range: `'${WISHLIST_SHEET_NAME}'!A2:G`,
+  });
+  await service.spreadsheets.values.update({
+    spreadsheetId: id,
+    range: `'${WISHLIST_SHEET_NAME}'!A2:G${rows.length + 1}`,
+    valueInputOption: "RAW",
+    requestBody: { values: rows },
+  });
+  return { version: 1 as const, revision, updatedAt, items };
 }
 
 export async function writeHouseholdState(

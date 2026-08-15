@@ -20,6 +20,7 @@ Amex明細と家賃・固定費をまとめ、月次精算額、将来支出、�
 - 共有パスワード認証と署名済みセッションCookie
 - 月次締めによる月単位のGoogle Sheets APIへの保存・読込（`state_YYYY-MM` タブ）
 - 月次履歴で締め済み月の明細・内訳・合計を確認
+- 欲しいものリスト（もの、カテゴリ、金額、URL）とカテゴリ別・全体合計
 - 旧localStorageデータの初回移行
 - 複数端末更新時のrevision競合検知
 
@@ -41,6 +42,8 @@ npm run dev
 - `GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY`
 
 Spreadsheetは `GOOGLE_SERVICE_ACCOUNT_EMAIL` のメールアドレスへ編集者として共有してください。サーバーは対応するprivate keyでService Accountとして認証し、月次締め時に対象月の `state_YYYY-MM` シートを自動作成します。旧 `app_state` がある場合は、最初の締め対象月へ下書きとして読み込み、締め時に月次タブへ保存します。
+
+欲しいものリストを初めて読み込むと、同じSpreadsheetに `wishlist` シートが自動作成されます。欲しいものリストは月次状態とは独立して保存されるため、月次締め後も保持されます。
 
 検証:
 

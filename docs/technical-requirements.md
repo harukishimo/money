@@ -2,7 +2,7 @@
 
 | 項目 | 内容 |
 |---|---|
-| 文書版 | 1.2 |
+| 文書版 | 1.3 |
 | 作成日 | 2026-08-15 |
 | 対象 | Next.js / Vercel / Google Sheets API構成 |
 | 参照 | `requirements-definition.md` |
@@ -56,6 +56,7 @@ flowchart LR
 | Route Handlers | 認証、入力検証、Repository呼出、HTTP応答 |
 | Sheets Repository | `state_YYYY-MM`シートの初期化、分割JSONの読込・更新、revision競合検知 |
 | Google Spreadsheet | 1世帯分の月別アプリ状態を永続化し、Google標準の変更履歴を保持 |
+| Wishlist Repository | 欲しいものを `wishlist` シートへ保存し、revisionで同時更新を検知 |
 
 ## 4. ディレクトリ構成
 
@@ -66,6 +67,7 @@ app/
     auth/logout/route.ts
     state/route.ts
     history/route.ts
+    wishlist/route.ts
   login/
     page.tsx
     login-form.tsx
@@ -73,6 +75,7 @@ app/
     auth.ts
     finance.ts
     life-plan.ts
+    wishlist.ts
     login-rate-limit.ts
     sheets.ts
     state.ts
@@ -116,6 +119,8 @@ docs/
 | PUT | `/api/state?month=YYYY-MM` | expectedRevisionを照合し、対象月の状態と締め状態を保存 |
 | DELETE | `/api/state?month=YYYY-MM` | expectedRevisionを照合し、対象月の保存状態を削除 |
 | GET | `/api/history` | 締め済みの月別履歴を取得 |
+| GET | `/api/wishlist` | 欲しいものリストとrevisionを取得 |
+| PUT | `/api/wishlist` | 欲しいものリストをrevision照合後に保存 |
 
 ### 6.1 入力検証
 
@@ -125,6 +130,8 @@ docs/
 - Sheetsへは `RAW` で書き込み、数式として解釈させない。
 - 保存状態はサーバー側の型ガードで検証する。
 - Excelの元行番号は8以上とする。
+- 欲しいもののカテゴリは1〜100文字、名称は1〜255文字、金額は0円以上とする。
+- 欲しいもののURLは空欄または`http` / `https`のURLだけを許可する。
 
 ## 7. 認証・認可
 
@@ -160,6 +167,8 @@ ProductionとPreviewで値を分離する。Previewでは本番Spreadsheetを使
 - SheetはトランザクションDBではないため、単一世帯・低頻度更新を前提とする。
 - 更新前に `revision` を比較する楽観的同時実行制御を行い、不一致時は再読込を促す。
 - 書込失敗時はUIの編集内容を保持し、再送可能にする。
+- `wishlist` シートはA〜G列にID、名称、カテゴリ、金額、URL、更新日時、revisionを保存する。
+- 欲しいものリストの更新もrevisionを比較し、別端末の更新を上書きしない。
 
 ## 10. Excel解析要件
 

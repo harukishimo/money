@@ -15,6 +15,7 @@ import {
 } from "./lib/finance";
 import type { HistoryEntry } from "./lib/history";
 import { createDefaultLifePlanInputs, type LifePlanInputs } from "./lib/life-plan";
+import { isWishlistUrl, summarizeWishlist, type WishlistItem, type WishlistSummary } from "./lib/wishlist";
 import {
   closingMonthKey,
   formatMonthLabel,
@@ -25,7 +26,7 @@ import {
   type ManualExpense,
 } from "./lib/state";
 
-type View = "settlement" | "simulation" | "lifeplan" | "history";
+type View = "settlement" | "simulation" | "lifeplan" | "history" | "wishlist";
 type SyncStatus = "loading" | "saved" | "saving" | "error";
 
 const STORAGE_KEY = "futari-settlement-v1";
@@ -79,6 +80,13 @@ const categoryLabels: Record<ManualCategory, string> = {
   other: "その他",
 };
 
+type WishlistForm = {
+  name: string;
+  category: string;
+  amount: string;
+  url: string;
+};
+
 function emptyHouseholdState(): HouseholdState {
   return {
     records: [],
@@ -124,6 +132,11 @@ async function loadHistory() {
   return responseJson<{ entries: HistoryEntry[] }>(response);
 }
 
+async function loadWishlist() {
+  const response = await fetch("/api/wishlist", { cache: "no-store" });
+  return responseJson<{ items: WishlistItem[]; revision: string | null; updatedAt: string | null }>(response);
+}
+
 async function saveRemoteState(
   state: HouseholdState,
   monthKey: string,
@@ -136,6 +149,15 @@ async function saveRemoteState(
     body: JSON.stringify({ state, expectedRevision, ...(closedAt === undefined ? {} : { closedAt }) }),
   });
   return responseJson<{ revision: string; updatedAt: string; closedAt: string | null }>(response);
+}
+
+async function saveRemoteWishlist(items: WishlistItem[], expectedRevision: string | null) {
+  const response = await fetch("/api/wishlist", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ items, expectedRevision }),
+  });
+  return responseJson<{ items: WishlistItem[]; revision: string; updatedAt: string }>(response);
 }
 
 export default function Home() {
@@ -151,6 +173,7 @@ export default function Home() {
   const [closedAt, setClosedAt] = useState<string | null>(null);
   const [historyEntries, setHistoryEntries] = useState<HistoryEntry[]>([]);
   const [selectedHistoryMonth, setSelectedHistoryMonth] = useState<string | null>(null);
+  const [wishlist, setWishlist] = useState<WishlistItem[]>([]);
   const [isDemo, setIsDemo] = useState(true);
   const [hydrated, setHydrated] = useState(false);
   const [historyReady, setHistoryReady] = useState(false);
@@ -167,19 +190,29 @@ export default function Home() {
     shareRate: "100",
     recurring: false,
   });
+  const [wishlistForm, setWishlistForm] = useState<WishlistForm>({
+    name: "",
+    category: "未分類",
+    amount: "",
+    url: "",
+  });
   const fileInputRef = useRef<HTMLInputElement>(null);
   const revisionRef = useRef<string | null>(null);
+  const wishlistRevisionRef = useRef<string | null>(null);
   const lastSavedJsonRef = useRef<string | null>(null);
   const saveQueueRef = useRef<Promise<void>>(Promise.resolve());
+  const wishlistSaveQueueRef = useRef<Promise<void>>(Promise.resolve());
 
   useEffect(() => {
     let cancelled = false;
     void (async () => {
       try {
-        const remoteHistory = await loadHistory();
+        const [remoteHistory, remoteWishlist] = await Promise.all([loadHistory(), loadWishlist()]);
         if (cancelled) return;
         setHistoryEntries(remoteHistory.entries);
         setSelectedHistoryMonth((current) => current ?? remoteHistory.entries[0]?.monthKey ?? null);
+        setWishlist(remoteWishlist.items);
+        wishlistRevisionRef.current = remoteWishlist.revision;
         const latestClosedMonth = remoteHistory.entries[0]?.monthKey;
         const nextWorkMonth = latestClosedMonth ? nextMonthKey(latestClosedMonth) : closingMonthKey();
         if (nextWorkMonth !== monthKey) setMonthKey(nextWorkMonth);
@@ -312,6 +345,7 @@ export default function Home() {
   const perPersonSettlement = Math.round(settlementTotal / 2);
   const includedCount = records.filter((record) => record.included).length;
   const excludedCount = records.filter((record) => !record.included).length;
+  const wishlistSummary = useMemo(() => summarizeWishlist(wishlist), [wishlist]);
 
   const projections = useMemo(
     () => Object.fromEntries(modes.map(({ key }) => [key, buildProjection(simulation, key)])) as Record<SimulationMode, ReturnType<typeof buildProjection>>,
@@ -433,6 +467,50 @@ export default function Home() {
     setError(null);
   };
 
+  const persistWishlist = (items: WishlistItem[]) => {
+    wishlistSaveQueueRef.current = wishlistSaveQueueRef.current.then(async () => {
+      try {
+        const saved = await saveRemoteWishlist(items, wishlistRevisionRef.current);
+        wishlistRevisionRef.current = saved.revision;
+      } catch (caught) {
+        if (caught instanceof AuthenticationRequiredError) {
+          router.replace("/login");
+          return;
+        }
+        setError(caught instanceof Error ? caught.message : "欲しいものリストを保存できませんでした。");
+      }
+    });
+  };
+
+  const addWishlistItem = () => {
+    const amount = Number(wishlistForm.amount.replaceAll(",", ""));
+    const name = wishlistForm.name.trim();
+    const category = wishlistForm.category.trim();
+    const url = wishlistForm.url.trim();
+    if (!name || !category || !Number.isFinite(amount) || amount <= 0 || amount > Number.MAX_SAFE_INTEGER) {
+      setError("もの、カテゴリ、1円以上の金額を入力してください。");
+      return;
+    }
+    if (!isWishlistUrl(url)) {
+      setError("URLはhttp://またはhttps://から始まる形式で入力してください。");
+      return;
+    }
+    const nextItems = [...wishlist, { id: makeId("wishlist"), name, category, amount, url }];
+    setWishlist(nextItems);
+    setWishlistForm({ name: "", category, amount: "", url: "" });
+    setError(null);
+    setNotice(`${name}を欲しいものリストに追加しました。`);
+    persistWishlist(nextItems);
+  };
+
+  const removeWishlistItem = (id: string) => {
+    const nextItems = wishlist.filter((item) => item.id !== id);
+    setWishlist(nextItems);
+    setError(null);
+    setNotice("欲しいものリストを更新しました。");
+    persistWishlist(nextItems);
+  };
+
   const applyActualsToSimulation = () => {
     const recurring = manualExpenses.filter((expense) => expense.recurring);
     const amountFor = (category: ManualCategory) => recurring
@@ -508,6 +586,7 @@ export default function Home() {
           <button className={view === "simulation" ? "active" : ""} onClick={() => setView("simulation")}>将来支出</button>
           <button className={view === "lifeplan" ? "active" : ""} onClick={() => setView("lifeplan")}>ライフプラン</button>
           <button className={view === "history" ? "active" : ""} onClick={() => setView("history")}>月次履歴</button>
+          <button className={view === "wishlist" ? "active" : ""} onClick={() => setView("wishlist")}>欲しいもの</button>
         </nav>
         <div className="account-actions">
           <span className={`sync-status ${syncStatus}`}><span aria-hidden="true">●</span>{syncStatus === "loading" ? "読込中" : syncStatus === "saving" ? "保存中" : syncStatus === "error" ? "保存エラー" : "Sheets保存済み"}</span>
@@ -759,8 +838,17 @@ export default function Home() {
           </section>
             ) : view === "lifeplan" ? (
               <LifePlanPanel value={lifePlan} onChange={updateLifePlan} />
-            ) : (
+            ) : view === "history" ? (
               <HistoryPanel entries={historyEntries} selectedMonth={selectedHistoryMonth} onSelect={setSelectedHistoryMonth} />
+            ) : (
+              <WishlistPanel
+                items={wishlist}
+                summary={wishlistSummary}
+                form={wishlistForm}
+                onFormChange={setWishlistForm}
+                onAdd={addWishlistItem}
+                onRemove={removeWishlistItem}
+              />
             )}
       </main>
 
@@ -886,6 +974,91 @@ function HistoryPanel({
           </div>
         </div>
       )}
+    </section>
+  );
+}
+
+function WishlistPanel({
+  items,
+  summary,
+  form,
+  onFormChange,
+  onAdd,
+  onRemove,
+}: {
+  items: WishlistItem[];
+  summary: WishlistSummary;
+  form: WishlistForm;
+  onFormChange: (form: WishlistForm) => void;
+  onAdd: () => void;
+  onRemove: (id: string) => void;
+}) {
+  return (
+    <section className="wishlist-page" aria-labelledby="wishlist-title">
+      <div className="simulation-intro">
+        <div>
+          <p className="eyebrow">WISHLIST / BUDGET</p>
+          <h1 id="wishlist-title">いつか欲しいものを、<br />金額で見渡す。</h1>
+        </div>
+        <p>買いたいものをカテゴリとURL付きで保存します。月次精算とは分けて管理し、カテゴリ別と全体の予算をいつでも確認できます。</p>
+      </div>
+
+      <div className="wishlist-layout">
+        <aside className="wishlist-form-panel">
+          <div className="section-heading compact">
+            <div><p className="section-number">01</p><h2>欲しいものを登録</h2></div>
+          </div>
+          <div className="wishlist-form">
+            <label>もの<input value={form.name} placeholder="例：ダイニングテーブル" onChange={(event) => onFormChange({ ...form, name: event.target.value })} /></label>
+            <label>カテゴリ<input value={form.category} placeholder="例：家具、旅行" onChange={(event) => onFormChange({ ...form, category: event.target.value })} /></label>
+            <label>金額<div className="input-with-suffix"><input inputMode="numeric" value={form.amount} placeholder="0" onChange={(event) => onFormChange({ ...form, amount: event.target.value })} /><span>円</span></div></label>
+            <label>URL（任意）<input type="url" value={form.url} placeholder="https://..." onChange={(event) => onFormChange({ ...form, url: event.target.value })} /></label>
+            <button className="primary-button" onClick={onAdd}>リストに追加</button>
+          </div>
+          <p className="input-note wishlist-note">登録内容はGoogle Sheetsの`wishlist`タブへ保存され、月次締めでは消えません。</p>
+        </aside>
+
+        <div className="wishlist-results">
+          <div className="wishlist-kpis">
+            <div><span>全体合計</span><strong>{formatYen(summary.total)}</strong></div>
+            <div><span>登録数</span><strong>{items.length}件</strong></div>
+            <div><span>カテゴリ数</span><strong>{summary.categories.length}種類</strong></div>
+          </div>
+
+          <div className="wishlist-category-card">
+            <div className="section-heading compact"><div><p className="section-number">02</p><h2>カテゴリ別合計</h2></div></div>
+            {summary.categories.length === 0 ? <p className="empty-note">まだ登録がありません。</p> : (
+              <div className="wishlist-category-list">
+                {summary.categories.map((category) => (
+                  <div key={category.category}>
+                    <span>{category.category}<small>{category.count}件</small></span>
+                    <strong>{formatYen(category.amount)}</strong>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="wishlist-items-card">
+            <div className="section-heading compact"><div><p className="section-number">03</p><h2>登録一覧</h2></div></div>
+            {items.length === 0 ? <div className="wishlist-empty">欲しいものを登録すると、ここに一覧表示されます。</div> : (
+              <div className="wishlist-item-list">
+                {items.map((item) => (
+                  <div className="wishlist-item" key={item.id}>
+                    <div className="wishlist-item-copy">
+                      <span>{item.category}</span>
+                      <strong>{item.name}</strong>
+                      {item.url && <a href={item.url} target="_blank" rel="noreferrer">商品ページを開く ↗</a>}
+                    </div>
+                    <strong className="wishlist-item-amount">{formatYen(item.amount)}</strong>
+                    <button className="wishlist-remove" aria-label={`${item.name}を削除`} onClick={() => onRemove(item.id)}>×</button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
     </section>
   );
 }
