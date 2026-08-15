@@ -54,8 +54,8 @@ flowchart LR
 | Parser | 行8以降の読込、列C/D/F/Hの抽出、金額・文字列正規化 |
 | Calculation Engine | 対象判定、合計、按分、短期支出予測、最長600か月のライフプラン計算 |
 | Route Handlers | 認証、入力検証、Repository呼出、HTTP応答 |
-| Sheets Repository | `app_state`シートの初期化、分割JSONの読込・更新、revision競合検知 |
-| Google Spreadsheet | 1世帯分の最新アプリ状態を永続化し、Google標準の変更履歴を保持 |
+| Sheets Repository | `state_YYYY-MM`シートの初期化、分割JSONの読込・更新、revision競合検知 |
+| Google Spreadsheet | 1世帯分の月別アプリ状態を永続化し、Google標準の変更履歴を保持 |
 
 ## 4. ディレクトリ構成
 
@@ -91,7 +91,7 @@ docs/
 
 ## 5. Google Spreadsheet設計
 
-MVPでは既存Spreadsheetに `app_state` シートを自動作成し、アプリの最新状態を分割JSONとして保存する。1セルあたりの文字数上限を避けるため、JSONは30,000文字ごとに分割する。
+アプリは既存Spreadsheetに対象月の `state_YYYY-MM` シートを自動作成し、その月の状態を分割JSONとして保存する。対象月は日本時間の前月であり、月次締めボタン押下時に `closedAt` を保存する。1セルあたりの文字数上限を避けるため、JSONは30,000文字ごとに分割する。過去の単一状態形式である `app_state` は、最初の締め対象月への初回アクセス時に対象月タブへ移行する。
 
 | 列 | 内容 |
 |---|---|
@@ -111,9 +111,9 @@ MVPでは既存Spreadsheetに `app_state` シートを自動作成し、アプ�
 |---|---|---|
 | POST | `/api/auth/login` | 共有パスワードを照合し、セッションCookieを発行 |
 | POST | `/api/auth/logout` | セッションCookieを削除 |
-| GET | `/api/state` | Google Sheetsから最新状態とrevisionを取得 |
-| PUT | `/api/state` | expectedRevisionを照合し、最新状態を保存 |
-| DELETE | `/api/state` | expectedRevisionを照合し、保存状態を削除 |
+| GET | `/api/state?month=YYYY-MM` | Google Sheetsから対象月の状態、締め状態、revisionを取得 |
+| PUT | `/api/state?month=YYYY-MM` | expectedRevisionを照合し、対象月の状態と締め状態を保存 |
+| DELETE | `/api/state?month=YYYY-MM` | expectedRevisionを照合し、対象月の保存状態を削除 |
 
 ### 6.1 入力検証
 
@@ -151,7 +151,7 @@ ProductionとPreviewで値を分離する。Previewでは本番Spreadsheetを使
 
 ## 9. Google Sheets API実装要件
 
-- 初回アクセス時は `spreadsheets.get` で `app_state` の存在を確認し、なければ `spreadsheets.batchUpdate` で作成する。
+- 締め対象月へのアクセス時は `spreadsheets.get` で `state_YYYY-MM` の存在を確認し、なければ `spreadsheets.batchUpdate` で作成する。
 - 読込は `spreadsheets.values.get` を使用する。
 - 更新前に `spreadsheets.values.clear` を行い、`spreadsheets.values.update` でヘッダーと分割行を書き込む。
 - Repository内で2次元配列をドメイン型へ変換し、UIへSheet行を露出しない。
@@ -250,7 +250,7 @@ ProductionとPreviewで値を分離する。Previewでは本番Spreadsheetを使
 | ホスティング | Vercel CLIでモック公開済み | GitHub連携Productionへ切替待ち |
 | 保存 | Google Sheets API実装済み | 環境変数設定後に接続確認 |
 | 認証 | 共有パスワード・署名Cookie実装済み | ハッシュと署名鍵の設定待ち |
-| 履歴 | 最新状態＋Google標準変更履歴 | 過去月UIは将来拡張 |
+| 履歴 | `state_YYYY-MM` タブへ月別保存、`closedAt`を保持 | 過去月UIは将来拡張 |
 | 複数端末 | revision付き最新状態を共有 | 実Spreadsheetで結合テスト待ち |
 | ライフプラン | 10機能の月次計算・入力・結果表示を実装済み | 実データ入力後の前提調整待ち |
 

@@ -137,6 +137,20 @@ export function parseAmexRows(rows: unknown[][]): AmexTransaction[] {
   });
 }
 
+export function extractStatementMonth(rows: unknown[][]): string | null {
+  const headerText = rows
+    .slice(0, 7)
+    .flatMap((row) => row)
+    .map((value) => normalize(value))
+    .join(" ");
+  const match = headerText.match(/(\d{4})\s*年\s*(\d{1,2})\s*月|\b(\d{4})[-/]\s*(\d{1,2})\b/);
+  if (!match) return null;
+  const year = match[1] ?? match[3];
+  const month = Number(match[2] ?? match[4]);
+  if (!year || month < 1 || month > 12) return null;
+  return `${year}-${String(month).padStart(2, "0")}`;
+}
+
 export function parseCsv(text: string): string[][] {
   const rows: string[][] = [];
   let row: string[] = [];

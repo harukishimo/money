@@ -1,13 +1,14 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { parseAmexRows } from "../app/lib/finance.ts";
+import { extractStatementMonth, parseAmexRows } from "../app/lib/finance.ts";
 import {
   joinPayloadRows,
+  monthlySheetName,
   serviceAccountCredentialsFromEnvironment,
   SheetsConfigurationError,
   splitPayload,
 } from "../app/lib/sheets.ts";
-import { parseHouseholdState } from "../app/lib/state.ts";
+import { closingMonthKey, currentMonthKey, parseHouseholdState } from "../app/lib/state.ts";
 
 const state = {
   records: parseAmexRows([
@@ -78,4 +79,12 @@ test("service account credentials use email and private key environment variable
     () => serviceAccountCredentialsFromEnvironment({ GOOGLE_SERVICE_ACCOUNT_EMAIL: "household@example.com" }),
     SheetsConfigurationError,
   );
+});
+
+test("monthly storage uses the statement month and Tokyo calendar", () => {
+  assert.equal(extractStatementMonth([["ご請求月", "2026年8月"]]), "2026-08");
+  assert.equal(extractStatementMonth([["Billing month", "2026/09"]]), "2026-09");
+  assert.equal(monthlySheetName("2026-08"), "state_2026-08");
+  assert.equal(currentMonthKey(new Date("2026-08-31T15:00:00.000Z")), "2026-09");
+  assert.equal(closingMonthKey(new Date("2026-08-15T03:00:00.000Z")), "2026-07");
 });

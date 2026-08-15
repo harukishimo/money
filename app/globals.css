@@ -104,6 +104,9 @@ main { width: min(1420px, 100%); margin: 0 auto; padding: 0 4.5vw 80px; }
 .total-breakdown b { display: block; color: var(--ink); margin-top: 4px; font-size: 16px; }
 .text-action { margin-top: 25px; border: 0; border-bottom: 1px solid var(--ink); background: transparent; padding: 0 0 5px; font-size: 13px; cursor: pointer; }
 .text-action span { color: var(--accent); margin-left: 8px; }
+.closing-action { margin-top: 25px; padding-top: 17px; border-top: 1px solid var(--line); }
+.closing-action p { margin: 0 0 9px; color: var(--muted); font-size: 11px; }
+.closing-action .primary-button { width: 100%; }
 
 .summary-strip { display: grid; grid-template-columns: repeat(4, 1fr); border-bottom: 1px solid var(--line); }
 .summary-strip div { min-height: 91px; padding: 21px 24px; border-right: 1px solid var(--line); }

@@ -7,6 +7,42 @@ import {
 
 export type ManualCategory = "rent" | "fixed" | "other";
 
+const MONTH_KEY_PATTERN = /^\d{4}-(0[1-9]|1[0-2])$/;
+
+export function isMonthKey(value: unknown): value is string {
+  return typeof value === "string" && MONTH_KEY_PATTERN.test(value);
+}
+
+export function currentMonthKey(now = new Date()) {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "Asia/Tokyo",
+    year: "numeric",
+    month: "2-digit",
+  }).formatToParts(now);
+  const year = parts.find((part) => part.type === "year")?.value;
+  const month = parts.find((part) => part.type === "month")?.value;
+  const key = `${year}-${month}`;
+  if (!isMonthKey(key)) throw new Error("Unable to determine the current month.");
+  return key;
+}
+
+export function previousMonthKey(monthKey: string) {
+  if (!isMonthKey(monthKey)) throw new Error("Invalid month key.");
+  const [year, month] = monthKey.split("-").map(Number);
+  const previous = new Date(Date.UTC(year, month - 2, 1));
+  return `${previous.getUTCFullYear()}-${String(previous.getUTCMonth() + 1).padStart(2, "0")}`;
+}
+
+export function closingMonthKey(now = new Date()) {
+  return previousMonthKey(currentMonthKey(now));
+}
+
+export function formatMonthLabel(monthKey: string) {
+  if (!isMonthKey(monthKey)) return monthKey;
+  const [year, month] = monthKey.split("-");
+  return `${year}年${Number(month)}月`;
+}
+
 export interface ManualExpense {
   id: string;
   label: string;

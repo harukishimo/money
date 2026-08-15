@@ -18,7 +18,7 @@ Amex明細と家賃・固定費をまとめ、月次精算額、将来支出、�
 - 賃貸と住宅購入の比較、教育費、退職・年金、資産運用
 - 悲観・基準・楽観のライフプラン比較
 - 共有パスワード認証と署名済みセッションCookie
-- Google Sheets APIへの保存・読込
+- 月次締めによる月単位のGoogle Sheets APIへの保存・読込（`state_YYYY-MM` タブ）
 - 旧localStorageデータの初回移行
 - 複数端末更新時のrevision競合検知
 
@@ -39,7 +39,7 @@ npm run dev
 - `GOOGLE_SERVICE_ACCOUNT_EMAIL`
 - `GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY`
 
-Spreadsheetは `GOOGLE_SERVICE_ACCOUNT_EMAIL` のメールアドレスへ編集者として共有してください。サーバーは対応するprivate keyでService Accountとして認証し、初回接続時に `app_state` シートを自動作成します。
+Spreadsheetは `GOOGLE_SERVICE_ACCOUNT_EMAIL` のメールアドレスへ編集者として共有してください。サーバーは対応するprivate keyでService Accountとして認証し、月次締め時に対象月の `state_YYYY-MM` シートを自動作成します。旧 `app_state` がある場合は、最初の締め対象月へ一度だけ移行します。
 
 検証:
 

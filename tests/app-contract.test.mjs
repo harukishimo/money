@@ -21,7 +21,7 @@ test("uses protected Next.js routes and Google Sheets without database bindings"
   assert.match(packageJson, /"build": "next build"/);
   assert.doesNotMatch(packageJson, /vinext|wrangler|drizzle/);
   assert.match(page, /readSheet/);
-  assert.match(page, /fetch\("\/api\/state"/);
+  assert.match(page, /fetch\(`\/api\/state\?month=/);
   assert.match(page, /LifePlanPanel/);
   assert.match(page, /shareRate: "100"/);
   assert.match(page, /perPersonSettlement/);
