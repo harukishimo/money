@@ -8,7 +8,7 @@ export async function generateMetadata(): Promise<Metadata> {
   const protocol = requestHeaders.get("x-forwarded-proto") ?? (host.startsWith("localhost") ? "http" : "https");
   const origin = `${protocol}://${host}`;
   const title = "ふたりの家計室 | 精算と将来シミュレーション";
-  const description = "Amex明細と家賃・固定費をまとめ、ふたりの精算額と将来の支出を試算する個人用ツール。";
+  const description = "Amex明細の精算から、収入・貯蓄・住宅・教育・老後を含むふたりのライフプランまで試算する個人用ツール。";
   const image = `${origin}/og.png`;
   return {
     metadataBase: new URL(origin),
@@ -21,7 +21,7 @@ export async function generateMetadata(): Promise<Metadata> {
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="ja">
+    <html lang="ja" data-scroll-behavior="smooth">
       <body>{children}</body>
     </html>
   );

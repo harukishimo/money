@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { readSheet } from "read-excel-file/browser";
+import LifePlanPanel from "./life-plan-panel";
 import {
   buildProjection,
   formatYen,
@@ -11,27 +13,20 @@ import {
   type SimulationInputs,
   type SimulationMode,
 } from "./lib/finance";
+import { createDefaultLifePlanInputs, type LifePlanInputs } from "./lib/life-plan";
+import {
+  parseHouseholdState,
+  type HouseholdState,
+  type ManualCategory,
+  type ManualExpense,
+} from "./lib/state";
 
-type View = "settlement" | "simulation";
-type ManualCategory = "rent" | "fixed" | "other";
-
-interface ManualExpense {
-  id: string;
-  label: string;
-  category: ManualCategory;
-  amount: number;
-  shareRate: number;
-  recurring: boolean;
-}
-
-interface StoredState {
-  records: AmexTransaction[];
-  manualExpenses: ManualExpense[];
-  simulation: SimulationInputs;
-  fileName: string;
-}
+type View = "settlement" | "simulation" | "lifeplan";
+type SyncStatus = "loading" | "saved" | "saving" | "error";
 
 const STORAGE_KEY = "futari-settlement-v1";
+
+class AuthenticationRequiredError extends Error {}
 
 const demoRows: unknown[][] = [
   ["カードご利用代金明細書"],
@@ -66,6 +61,8 @@ const defaultSimulation: SimulationInputs = {
   oneOffMonth: 6,
 };
 
+const defaultLifePlan = createDefaultLifePlanInputs();
+
 const modes: { key: SimulationMode; label: string; note: string }[] = [
   { key: "lean", label: "節約", note: "変動費を抑える" },
   { key: "base", label: "基準", note: "現在のペース" },
@@ -87,15 +84,36 @@ function expenseCharge(expense: ManualExpense) {
   return Math.round(expense.amount * (expense.shareRate / 100));
 }
 
+async function responseJson<T>(response: Response): Promise<T> {
+  const body = await response.json() as T & { error?: string };
+  if (response.status === 401) {
+    throw new AuthenticationRequiredError("ログインが必要です。");
+  }
+  if (!response.ok) throw new Error(body.error || "サーバーとの通信に失敗しました。");
+  return body;
+}
+
+async function saveRemoteState(state: HouseholdState, expectedRevision: string | null) {
+  const response = await fetch("/api/state", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ state, expectedRevision }),
+  });
+  return responseJson<{ revision: string; updatedAt: string }>(response);
+}
+
 export default function Home() {
+  const router = useRouter();
   const [view, setView] = useState<View>("settlement");
   const [records, setRecords] = useState<AmexTransaction[]>(() => parseAmexRows(demoRows));
   const [manualExpenses, setManualExpenses] = useState<ManualExpense[]>(demoManual);
   const [simulation, setSimulation] = useState<SimulationInputs>(defaultSimulation);
+  const [lifePlan, setLifePlan] = useState<LifePlanInputs>(defaultLifePlan);
   const [simulationMode, setSimulationMode] = useState<SimulationMode>("base");
   const [fileName, setFileName] = useState("サンプル明細.xlsx");
   const [isDemo, setIsDemo] = useState(true);
   const [hydrated, setHydrated] = useState(false);
+  const [syncStatus, setSyncStatus] = useState<SyncStatus>("loading");
   const [importing, setImporting] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -107,32 +125,102 @@ export default function Home() {
     recurring: false,
   });
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const revisionRef = useRef<string | null>(null);
+  const lastSavedJsonRef = useRef<string | null>(null);
+  const saveQueueRef = useRef<Promise<void>>(Promise.resolve());
 
   useEffect(() => {
-    try {
-      const stored = localStorage.getItem(STORAGE_KEY);
-      if (stored) {
-        const parsed = JSON.parse(stored) as Partial<StoredState>;
-        if (Array.isArray(parsed.records) && Array.isArray(parsed.manualExpenses) && parsed.simulation) {
-          setRecords(parsed.records);
-          setManualExpenses(parsed.manualExpenses);
-          setSimulation({ ...defaultSimulation, ...parsed.simulation });
-          setFileName(parsed.fileName || "保存済み明細");
-          setIsDemo(false);
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      void (async () => {
+        try {
+          const response = await fetch("/api/state", { cache: "no-store" });
+          const remote = await responseJson<{
+            state: HouseholdState | null;
+            revision: string | null;
+            updatedAt: string | null;
+          }>(response);
+          if (cancelled) return;
+
+          const remoteState = parseHouseholdState(remote.state);
+          if (remoteState) {
+            setRecords(remoteState.records);
+            setManualExpenses(remoteState.manualExpenses);
+            setSimulation({ ...defaultSimulation, ...remoteState.simulation });
+            setLifePlan(remoteState.lifePlan);
+            setFileName(remoteState.fileName || "保存済み明細");
+            setIsDemo(false);
+            revisionRef.current = remote.revision;
+            lastSavedJsonRef.current = JSON.stringify(remoteState);
+            setSyncStatus("saved");
+            localStorage.removeItem(STORAGE_KEY);
+            return;
+          }
+
+          const legacyText = localStorage.getItem(STORAGE_KEY);
+          const legacyState = legacyText ? parseHouseholdState(JSON.parse(legacyText)) : null;
+          if (legacyState) {
+            const saved = await saveRemoteState(legacyState, null);
+            if (cancelled) return;
+            setRecords(legacyState.records);
+            setManualExpenses(legacyState.manualExpenses);
+            setSimulation({ ...defaultSimulation, ...legacyState.simulation });
+            setLifePlan(legacyState.lifePlan);
+            setFileName(legacyState.fileName || "移行済み明細");
+            setIsDemo(false);
+            revisionRef.current = saved.revision;
+            lastSavedJsonRef.current = JSON.stringify(legacyState);
+            localStorage.removeItem(STORAGE_KEY);
+            setNotice("端末内の保存データをGoogle Sheetsへ移行しました。");
+          }
+          setSyncStatus("saved");
+        } catch (caught) {
+          if (cancelled) return;
+          if (caught instanceof AuthenticationRequiredError) {
+            router.replace("/login");
+            return;
+          }
+          setSyncStatus("error");
+          setError(caught instanceof Error ? caught.message : "保存データを読み込めませんでした。");
+        } finally {
+          if (!cancelled) setHydrated(true);
         }
-      }
-    } catch {
-      setNotice("保存データを読み込めなかったため、サンプルを表示しています。");
-    } finally {
-      setHydrated(true);
-    }
-  }, []);
+      })();
+    }, 0);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [router]);
 
   useEffect(() => {
     if (!hydrated || isDemo) return;
-    const state: StoredState = { records, manualExpenses, simulation, fileName };
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-  }, [records, manualExpenses, simulation, fileName, hydrated, isDemo]);
+    const state: HouseholdState = { records, manualExpenses, simulation, lifePlan, fileName };
+    const serialized = JSON.stringify(state);
+    if (serialized === lastSavedJsonRef.current) return;
+
+    const timer = window.setTimeout(() => {
+      setSyncStatus("saving");
+      saveQueueRef.current = saveQueueRef.current.then(async () => {
+        try {
+          const saved = await saveRemoteState(state, revisionRef.current);
+          revisionRef.current = saved.revision;
+          lastSavedJsonRef.current = serialized;
+          setSyncStatus("saved");
+        } catch (caught) {
+          if (caught instanceof AuthenticationRequiredError) {
+            router.replace("/login");
+            return;
+          }
+          setSyncStatus("error");
+          setError(caught instanceof Error ? caught.message : "Google Sheetsへ保存できませんでした。");
+        }
+      });
+    }, 900);
+
+    return () => window.clearTimeout(timer);
+  }, [records, manualExpenses, simulation, lifePlan, fileName, hydrated, isDemo, router]);
 
   const amexAmount = useMemo(
     () => records.filter((record) => record.included).reduce((sum, record) => sum + record.amount, 0),
@@ -237,16 +325,50 @@ export default function Home() {
     setView("simulation");
   };
 
-  const resetToDemo = () => {
-    if (!window.confirm("端末に保存したデータを消去して、サンプル表示に戻しますか？")) return;
-    localStorage.removeItem(STORAGE_KEY);
-    setRecords(parseAmexRows(demoRows));
-    setManualExpenses(demoManual);
-    setSimulation(defaultSimulation);
-    setFileName("サンプル明細.xlsx");
-    setIsDemo(true);
-    setNotice("保存データを消去し、サンプル表示に戻しました。");
-    setError(null);
+  const updateLifePlan = (next: LifePlanInputs) => {
+    if (isDemo) {
+      setRecords([]);
+      setManualExpenses([]);
+      setFileName("未取込");
+    }
+    setIsDemo(false);
+    setLifePlan(next);
+  };
+
+  const resetToDemo = async () => {
+    if (!window.confirm("Google Sheetsに保存したデータを消去して、サンプル表示に戻しますか？")) return;
+    try {
+      const response = await fetch("/api/state", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ expectedRevision: revisionRef.current }),
+      });
+      await responseJson<{ deleted: true }>(response);
+      localStorage.removeItem(STORAGE_KEY);
+      revisionRef.current = null;
+      lastSavedJsonRef.current = null;
+      setRecords(parseAmexRows(demoRows));
+      setManualExpenses(demoManual);
+      setSimulation(defaultSimulation);
+      setLifePlan(createDefaultLifePlanInputs());
+      setFileName("サンプル明細.xlsx");
+      setIsDemo(true);
+      setSyncStatus("saved");
+      setNotice("Google Sheetsの保存データを消去し、サンプル表示に戻しました。");
+      setError(null);
+    } catch (caught) {
+      if (caught instanceof AuthenticationRequiredError) {
+        router.replace("/login");
+        return;
+      }
+      setError(caught instanceof Error ? caught.message : "保存データを消去できませんでした。");
+    }
+  };
+
+  const logout = async () => {
+    await fetch("/api/auth/logout", { method: "POST" });
+    router.replace("/login");
+    router.refresh();
   };
 
   return (
@@ -258,13 +380,19 @@ export default function Home() {
         </a>
         <nav className="view-switch" aria-label="表示切り替え">
           <button className={view === "settlement" ? "active" : ""} onClick={() => setView("settlement")}>今月の精算</button>
-          <button className={view === "simulation" ? "active" : ""} onClick={() => setView("simulation")}>将来シミュレーション</button>
+          <button className={view === "simulation" ? "active" : ""} onClick={() => setView("simulation")}>将来支出</button>
+          <button className={view === "lifeplan" ? "active" : ""} onClick={() => setView("lifeplan")}>ライフプラン</button>
         </nav>
-        <div className="privacy-note"><span aria-hidden="true">●</span> データはこの端末内だけ</div>
+        <div className="account-actions">
+          <span className={`sync-status ${syncStatus}`}><span aria-hidden="true">●</span>{syncStatus === "loading" ? "読込中" : syncStatus === "saving" ? "保存中" : syncStatus === "error" ? "保存エラー" : "Sheets保存済み"}</span>
+          <button onClick={() => void logout()}>ログアウト</button>
+        </div>
       </header>
 
       <main id="top">
-        {isDemo && (
+        {!hydrated ? (
+          <div className="demo-banner" role="status"><span>読込中</span>Google Sheetsから保存データを確認しています。</div>
+        ) : isDemo && (
           <div className="demo-banner" role="status">
             <span>サンプル表示中</span>
             Excelを読み込むと、実際の明細に置き換わります。
@@ -325,7 +453,7 @@ export default function Home() {
                     disabled={importing}
                   />
                   <span className="upload-icon" aria-hidden="true">↥</span>
-                  <span><strong>{importing ? "明細を確認中…" : "Excel または CSV を選択"}</strong><small>ファイルは外部に送信されません</small></span>
+                  <span><strong>{importing ? "明細を確認中…" : "Excel または CSV を選択"}</strong><small>元ファイルは送信せず、解析した明細だけをSheetsへ保存します</small></span>
                 </label>
 
                 <div className="logic-note">
@@ -413,7 +541,7 @@ export default function Home() {
               </aside>
             </section>
           </>
-        ) : (
+        ) : view === "simulation" ? (
           <section className="simulation-page" aria-labelledby="simulation-title">
             <div className="simulation-intro">
               <div>
@@ -496,12 +624,14 @@ export default function Home() {
               </div>
             </div>
           </section>
+        ) : (
+          <LifePlanPanel value={lifePlan} onChange={updateLifePlan} />
         )}
       </main>
 
       <footer>
         <p>ふたりの家計室 <span>— 個人用の精算・試算ツール</span></p>
-        <button onClick={resetToDemo}>保存データを消去</button>
+        <button onClick={() => void resetToDemo()}>保存データを消去</button>
       </footer>
     </div>
   );

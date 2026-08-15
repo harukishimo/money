@@ -1,0 +1,81 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import { parseAmexRows } from "../app/lib/finance.ts";
+import {
+  joinPayloadRows,
+  serviceAccountCredentialsFromEnvironment,
+  SheetsConfigurationError,
+  splitPayload,
+} from "../app/lib/sheets.ts";
+import { parseHouseholdState } from "../app/lib/state.ts";
+
+const state = {
+  records: parseAmexRows([
+    ...Array.from({ length: 7 }, () => []),
+    ["2026/08/01", "", "SHOP", "CHIHARU SATO", "", 1200, "", null],
+  ]),
+  manualExpenses: [{
+    id: "rent-1",
+    label: "家賃",
+    category: "rent",
+    amount: 120000,
+    shareRate: 50,
+    recurring: true,
+  }],
+  simulation: {
+    months: 24,
+    amexMonthly: 1200,
+    rentMonthly: 60000,
+    fixedMonthly: 0,
+    otherMonthly: 0,
+    annualGrowthRate: 2,
+    scenarioSwing: 15,
+    oneOffLabel: "旅行",
+    oneOffAmount: 100000,
+    oneOffMonth: 6,
+  },
+  fileName: "statement.xlsx",
+};
+
+test("household state validates persisted financial inputs", () => {
+  const parsed = parseHouseholdState(state);
+  assert.ok(parsed);
+  assert.deepEqual({
+    records: parsed.records,
+    manualExpenses: parsed.manualExpenses,
+    simulation: parsed.simulation,
+    fileName: parsed.fileName,
+  }, state);
+  assert.equal(parsed.lifePlan.people.length, 2);
+  assert.equal(parseHouseholdState({ ...state, manualExpenses: [{ ...state.manualExpenses[0], shareRate: 101 }] }), null);
+  assert.equal(parseHouseholdState({ ...state, lifePlan: { ...parsed.lifePlan, months: 601 } }), null);
+});
+
+test("sheet payload chunks round-trip in row order", () => {
+  const payload = JSON.stringify({ state, note: "長期保存".repeat(50) });
+  const chunks = splitPayload(payload, 37);
+  const rows = chunks.map((chunk, index) => ["household", index, chunk, "2026-08-15", "rev-1"]);
+  rows.reverse();
+  assert.equal(joinPayloadRows(rows), payload);
+});
+
+test("sheet payload rejects missing chunk indexes", () => {
+  assert.equal(joinPayloadRows([
+    ["household", 0, "first"],
+    ["household", 2, "third"],
+  ]), null);
+});
+
+test("service account credentials use email and private key environment variables", () => {
+  assert.deepEqual(serviceAccountCredentialsFromEnvironment({
+    GOOGLE_SERVICE_ACCOUNT_EMAIL: "household@example.iam.gserviceaccount.com",
+    GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY: "-----BEGIN PRIVATE KEY-----\\nsecret\\n-----END PRIVATE KEY-----\\n",
+  }), {
+    client_email: "household@example.iam.gserviceaccount.com",
+    private_key: "-----BEGIN PRIVATE KEY-----\nsecret\n-----END PRIVATE KEY-----",
+  });
+  assert.throws(
+    () => serviceAccountCredentialsFromEnvironment({ GOOGLE_SERVICE_ACCOUNT_EMAIL: "household@example.com" }),
+    SheetsConfigurationError,
+  );
+});
