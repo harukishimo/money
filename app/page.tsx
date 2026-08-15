@@ -121,7 +121,7 @@ export default function Home() {
     label: "",
     category: "other" as ManualCategory,
     amount: "",
-    shareRate: "100",
+    shareRate: "50",
     recurring: false,
   });
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -305,7 +305,7 @@ export default function Home() {
       setFileName("未取込");
     }
     setIsDemo(false);
-    setManualForm({ label: "", category: "other", amount: "", shareRate: "100", recurring: false });
+    setManualForm({ label: "", category: "other", amount: "", shareRate: "50", recurring: false });
     setError(null);
   };
 
