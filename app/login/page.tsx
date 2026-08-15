@@ -17,7 +17,7 @@ export default async function LoginPage({
   return (
     <main className="login-page">
       <section className="login-card" aria-labelledby="login-title">
-        <span className="brand-mark">F</span>
+        <span className="brand-mark" aria-hidden="true" />
         <p className="eyebrow">PRIVATE HOUSEHOLD</p>
         <h1 id="login-title">ふたりの家計室</h1>
         <p>共有パスワードを入力してください。パスワードはサーバーでハッシュ照合され、保存・記録されません。</p>

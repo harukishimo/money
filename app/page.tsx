@@ -375,7 +375,7 @@ export default function Home() {
     <div className="app-shell">
       <header className="topbar">
         <a className="brand" href="#top" aria-label="ふたりの家計室 トップ">
-          <span className="brand-mark">F</span>
+          <span className="brand-mark" aria-hidden="true" />
           <span><strong>ふたりの家計室</strong><small>settlement & forecast</small></span>
         </a>
         <nav className="view-switch" aria-label="表示切り替え">
