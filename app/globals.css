@@ -97,7 +97,9 @@ main { width: min(1420px, 100%); margin: 0 auto; padding: 0 4.5vw 80px; }
 
 .total-panel { border-left: 6px solid var(--accent); padding: 24px 0 22px 34px; }
 .total-panel > p { color: var(--muted); margin: 0 0 4px; font-size: 13px; }
-.total-panel > strong { display: block; font-family: Georgia, serif; font-size: clamp(48px, 5vw, 76px); line-height: 1.1; letter-spacing: -.04em; white-space: nowrap; }
+.total-panel > p.total-label { color: var(--accent); font-weight: 800; font-size: 14px; }
+.total-panel > strong { display: block; font-family: Georgia, serif; font-size: clamp(56px, 6vw, 92px); line-height: 1.05; letter-spacing: -.05em; white-space: nowrap; }
+.total-panel > p.total-household { margin: 10px 0 0; font-size: 12px; }
 .total-breakdown { display: flex; gap: 26px; margin-top: 20px; padding-top: 18px; border-top: 1px solid var(--line); font-size: 12px; color: var(--muted); }
 .total-breakdown b { display: block; color: var(--ink); margin-top: 4px; font-size: 16px; }
 .text-action { margin-top: 25px; border: 0; border-bottom: 1px solid var(--ink); background: transparent; padding: 0 0 5px; font-size: 13px; cursor: pointer; }
@@ -362,7 +364,7 @@ footer button { border: 0; border-bottom: 1px solid var(--muted); background: tr
   .hero-copy h1 { font-size: 49px; }
   .hero-description { font-size: 13px; margin-top: 20px; }
   .total-panel { margin-top: 38px; padding: 18px 0 18px 22px; }
-  .total-panel > strong { font-size: 46px; }
+  .total-panel > strong { font-size: 52px; }
   .summary-strip { grid-template-columns: repeat(2, 1fr); }
   .summary-strip div:nth-child(2) { border-right: 0; }
   .summary-strip div:nth-child(-n+2) { border-bottom: 1px solid var(--line); }

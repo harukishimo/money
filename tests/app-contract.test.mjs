@@ -23,8 +23,9 @@ test("uses protected Next.js routes and Google Sheets without database bindings"
   assert.match(page, /readSheet/);
   assert.match(page, /fetch\("\/api\/state"/);
   assert.match(page, /LifePlanPanel/);
-  assert.match(page, /shareRate: "50"/);
-  assert.doesNotMatch(page, /shareRate: "100"/);
+  assert.match(page, /shareRate: "100"/);
+  assert.match(page, /perPersonSettlement/);
+  assert.match(page, /Math\.round\(settlementTotal \/ 2\)/);
   assert.doesNotMatch(page, /localStorage\.setItem/);
   assert.match(page, /localStorage\.getItem/);
   assert.match(proxy, /verifySessionToken/);

@@ -121,7 +121,7 @@ export default function Home() {
     label: "",
     category: "other" as ManualCategory,
     amount: "",
-    shareRate: "50",
+    shareRate: "100",
     recurring: false,
   });
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -231,6 +231,7 @@ export default function Home() {
     [manualExpenses],
   );
   const settlementTotal = amexAmount + manualAmount;
+  const perPersonSettlement = Math.round(settlementTotal / 2);
   const includedCount = records.filter((record) => record.included).length;
   const excludedCount = records.filter((record) => !record.included).length;
 
@@ -305,7 +306,7 @@ export default function Home() {
       setFileName("未取込");
     }
     setIsDemo(false);
-    setManualForm({ label: "", category: "other", amount: "", shareRate: "50", recurring: false });
+    setManualForm({ label: "", category: "other", amount: "", shareRate: "100", recurring: false });
     setError(null);
   };
 
@@ -414,11 +415,12 @@ export default function Home() {
                 <p className="hero-description">Amex明細と手入力の費用を、決めたルールでひとつの金額にまとめます。</p>
               </div>
               <div className="total-panel">
-                <p>請求予定額</p>
-                <strong>{formatYen(settlementTotal)}</strong>
+                <p className="total-label">一人あたりの請求予定額</p>
+                <strong>{formatYen(perPersonSettlement)}</strong>
+                <p className="total-household">二人分合計 {formatYen(settlementTotal)}</p>
                 <div className="total-breakdown">
-                  <span>Amex <b>{formatYen(amexAmount)}</b></span>
-                  <span>手入力 <b>{formatYen(manualAmount)}</b></span>
+                  <span>Amex（一人分） <b>{formatYen(Math.round(amexAmount / 2))}</b></span>
+                  <span>手入力（一人分） <b>{formatYen(Math.round(manualAmount / 2))}</b></span>
                 </div>
                 <button className="text-action" onClick={applyActualsToSimulation}>この実績から将来を試す <span>→</span></button>
               </div>
