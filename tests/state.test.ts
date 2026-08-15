@@ -8,7 +8,8 @@ import {
   SheetsConfigurationError,
   splitPayload,
 } from "../app/lib/sheets.ts";
-import { closingMonthKey, currentMonthKey, parseHouseholdState } from "../app/lib/state.ts";
+import { closingMonthKey, currentMonthKey, nextMonthKey, parseHouseholdState } from "../app/lib/state.ts";
+import { buildHistoryEntry } from "../app/lib/history.ts";
 
 const state = {
   records: parseAmexRows([
@@ -87,4 +88,23 @@ test("monthly storage uses the statement month and Tokyo calendar", () => {
   assert.equal(monthlySheetName("2026-08"), "state_2026-08");
   assert.equal(currentMonthKey(new Date("2026-08-31T15:00:00.000Z")), "2026-09");
   assert.equal(closingMonthKey(new Date("2026-08-15T03:00:00.000Z")), "2026-07");
+  assert.equal(nextMonthKey("2026-07"), "2026-08");
+});
+
+test("history entry summarizes a closed monthly state", () => {
+  const parsed = parseHouseholdState(state);
+  assert.ok(parsed);
+  const entry = buildHistoryEntry({
+    version: 2,
+    monthKey: "2026-08",
+    closedAt: "2026-08-15T00:00:00.000Z",
+    revision: "rev-1",
+    updatedAt: "2026-08-15T00:00:00.000Z",
+    state: parsed,
+  }, parsed);
+  assert.ok(entry);
+  assert.equal(entry.amexAmount, 1200);
+  assert.equal(entry.manualAmount, 60000);
+  assert.equal(entry.total, 61200);
+  assert.equal(entry.perPerson, 30600);
 });

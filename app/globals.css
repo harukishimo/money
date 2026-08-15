@@ -234,6 +234,36 @@ input:focus, select:focus { border-color: var(--accent); outline: none; }
 .month-grid .event-month { background: #fff1e9; border-bottom-color: var(--accent); }
 .month-grid small { color: var(--accent); margin-top: 7px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
+.history-page { padding-top: 54px; }
+.history-grid { display: grid; grid-template-columns: 240px minmax(0, 1fr); gap: 42px; padding-top: 44px; align-items: start; }
+.history-list { border-top: 1px solid var(--line); }
+.history-list .section-number { margin: 15px 0 8px; }
+.history-list button { width: 100%; border: 0; border-bottom: 1px solid var(--line); background: transparent; padding: 16px 10px; text-align: left; cursor: pointer; }
+.history-list button.active { background: var(--ink); color: var(--surface); }
+.history-list button span, .history-list button strong, .history-list button small { display: block; }
+.history-list button span { font-size: 12px; font-weight: 700; }
+.history-list button strong { margin-top: 7px; font: 500 22px Georgia, serif; }
+.history-list button small { margin-top: 5px; color: var(--muted); font-size: 10px; }
+.history-list button.active small { color: #b8c8c5; }
+.history-detail { min-width: 0; }
+.history-detail-heading { display: flex; justify-content: space-between; align-items: end; gap: 22px; padding-bottom: 20px; border-bottom: 1px solid var(--line); }
+.history-detail-heading h2 { margin: 0; font: 500 30px Georgia, "Yu Mincho", serif; }
+.history-detail-heading > span { color: var(--muted); font-size: 10px; white-space: nowrap; }
+.history-kpis { display: grid; grid-template-columns: repeat(4, 1fr); border: 1px solid var(--line); border-top: 0; background: var(--surface); }
+.history-kpis > div { min-width: 0; padding: 17px; border-right: 1px solid var(--line); }
+.history-kpis > div:last-child { border-right: 0; }
+.history-kpis span { display: block; color: var(--muted); font-size: 10px; }
+.history-kpis strong { display: block; margin-top: 8px; font: 500 clamp(17px, 2vw, 25px) Georgia, serif; white-space: nowrap; }
+.history-section { margin-top: 32px; }
+.history-section .section-heading { margin-bottom: 15px; }
+.history-section .section-heading > span { color: var(--muted); font-size: 10px; }
+.history-expenses { border-top: 1px solid var(--line); }
+.history-expenses > div { display: grid; grid-template-columns: 100px 1fr auto; gap: 14px; align-items: baseline; padding: 13px 0; border-bottom: 1px solid var(--line); }
+.history-expenses span, .history-expenses small { color: var(--muted); font-size: 10px; }
+.history-expenses strong { font-size: 12px; }
+.history-expenses small { text-align: right; }
+.history-empty { margin-top: 44px; padding: 34px; border: 1px solid var(--line); background: var(--surface); color: var(--muted); text-align: center; font-size: 12px; }
+
 .life-plan-page { padding-top: 54px; }
 .life-plan-intro { padding-top: 30px; }
 .life-scenario-tabs { display: grid; grid-template-columns: repeat(3, 1fr); border: 1px solid var(--line); border-top: 0; background: rgba(255, 253, 247, .35); }
@@ -352,6 +382,10 @@ footer button { border: 0; border-bottom: 1px solid var(--muted); background: tr
   .one-off-block { grid-template-columns: repeat(3, 1fr); }
   .one-off-block h3 { grid-column: 1 / -1; }
   .life-plan-layout { grid-template-columns: 1fr; }
+  .history-grid { grid-template-columns: 1fr; }
+  .history-list { display: grid; grid-template-columns: repeat(3, 1fr); border-top: 0; gap: 10px; }
+  .history-list .section-number { grid-column: 1 / -1; }
+  .history-list button { border: 1px solid var(--line); }
   .life-inputs { border-right: 0; border-bottom: 1px solid var(--line); padding: 0 0 35px; }
   .plan-fields { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .wide-field { grid-column: auto; }
@@ -391,6 +425,16 @@ footer button { border: 0; border-bottom: 1px solid var(--muted); background: tr
   .chart-card { padding: 21px 16px; }
   .bar-row { grid-template-columns: 42px minmax(70px, 1fr) 90px; gap: 9px; }
   .month-grid { grid-template-columns: repeat(2, 1fr); }
+  .history-page { padding-top: 28px; }
+  .history-grid { padding-top: 30px; gap: 30px; }
+  .history-list { grid-template-columns: 1fr 1fr; }
+  .history-detail-heading { display: block; }
+  .history-detail-heading > span { display: block; margin-top: 14px; }
+  .history-kpis { grid-template-columns: repeat(2, 1fr); }
+  .history-kpis > div:nth-child(2) { border-right: 0; }
+  .history-kpis > div:nth-child(-n+2) { border-bottom: 1px solid var(--line); }
+  .history-expenses > div { grid-template-columns: 1fr auto; gap: 5px 12px; }
+  .history-expenses small { grid-column: 1 / -1; text-align: left; }
   .life-plan-page { padding-top: 28px; }
   .life-plan-intro { padding-top: 10px; }
   .life-scenario-tabs { grid-template-columns: 1fr; }

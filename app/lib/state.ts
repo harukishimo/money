@@ -33,6 +33,13 @@ export function previousMonthKey(monthKey: string) {
   return `${previous.getUTCFullYear()}-${String(previous.getUTCMonth() + 1).padStart(2, "0")}`;
 }
 
+export function nextMonthKey(monthKey: string) {
+  if (!isMonthKey(monthKey)) throw new Error("Invalid month key.");
+  const [year, month] = monthKey.split("-").map(Number);
+  const next = new Date(Date.UTC(year, month, 1));
+  return `${next.getUTCFullYear()}-${String(next.getUTCMonth() + 1).padStart(2, "0")}`;
+}
+
 export function closingMonthKey(now = new Date()) {
   return previousMonthKey(currentMonthKey(now));
 }

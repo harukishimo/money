@@ -105,16 +105,7 @@ async function ensureStateSheet(service: sheets_v4.Sheets, id: string, sheetName
   });
 }
 
-async function readStateFromSheet(service: sheets_v4.Sheets, id: string, sheetName: string) {
-  await ensureStateSheet(service, id, sheetName);
-  const response = await service.spreadsheets.values.get({
-    spreadsheetId: id,
-    range: `'${sheetName}'!A2:E`,
-  });
-  const rows = response.data.values ?? [];
-  const payload = joinPayloadRows(rows);
-  if (payload === null) return null;
-
+function parseStatePayload(payload: string) {
   const parsed = JSON.parse(payload) as StateEnvelope;
   if ((parsed.version !== 1 && parsed.version !== 2)
     || typeof parsed.revision !== "string"
@@ -126,10 +117,44 @@ async function readStateFromSheet(service: sheets_v4.Sheets, id: string, sheetNa
   return parsed;
 }
 
+async function readStatePayloadFromSheet(service: sheets_v4.Sheets, id: string, sheetName: string) {
+  const response = await service.spreadsheets.values.get({
+    spreadsheetId: id,
+    range: `'${sheetName}'!A2:E`,
+  });
+  const rows = response.data.values ?? [];
+  const payload = joinPayloadRows(rows);
+  if (payload === null) return null;
+  return parseStatePayload(payload);
+}
+
+async function readStateFromSheet(service: sheets_v4.Sheets, id: string, sheetName: string) {
+  await ensureStateSheet(service, id, sheetName);
+  return readStatePayloadFromSheet(service, id, sheetName);
+}
+
 export async function readHouseholdState(monthKey?: string): Promise<StateEnvelope | null> {
   const service = sheetsService();
   const id = spreadsheetId();
   return readStateFromSheet(service, id, monthKey ? monthlySheetName(monthKey) : LEGACY_SHEET_NAME);
+}
+
+export async function readHouseholdHistory(): Promise<StateEnvelope[]> {
+  const service = sheetsService();
+  const id = spreadsheetId();
+  const metadata = await service.spreadsheets.get({
+    spreadsheetId: id,
+    fields: "sheets.properties.title",
+  });
+  const sheetNames = (metadata.data.sheets ?? [])
+    .map((sheet) => sheet.properties?.title)
+    .filter((title): title is string => typeof title === "string"
+      && title.startsWith(MONTHLY_SHEET_PREFIX)
+      && isMonthKey(title.slice(MONTHLY_SHEET_PREFIX.length)));
+  const envelopes = await Promise.all(sheetNames.map((sheetName) => readStatePayloadFromSheet(service, id, sheetName)));
+  return envelopes
+    .filter((envelope): envelope is StateEnvelope => Boolean(envelope?.closedAt && envelope.monthKey))
+    .sort((left, right) => (right.monthKey ?? "").localeCompare(left.monthKey ?? ""));
 }
 
 export async function writeHouseholdState(

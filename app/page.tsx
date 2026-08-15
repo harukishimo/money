@@ -13,17 +13,19 @@ import {
   type SimulationInputs,
   type SimulationMode,
 } from "./lib/finance";
+import type { HistoryEntry } from "./lib/history";
 import { createDefaultLifePlanInputs, type LifePlanInputs } from "./lib/life-plan";
 import {
   closingMonthKey,
   formatMonthLabel,
+  nextMonthKey,
   parseHouseholdState,
   type HouseholdState,
   type ManualCategory,
   type ManualExpense,
 } from "./lib/state";
 
-type View = "settlement" | "simulation" | "lifeplan";
+type View = "settlement" | "simulation" | "lifeplan" | "history";
 type SyncStatus = "loading" | "saved" | "saving" | "error";
 
 const STORAGE_KEY = "futari-settlement-v1";
@@ -77,6 +79,16 @@ const categoryLabels: Record<ManualCategory, string> = {
   other: "その他",
 };
 
+function emptyHouseholdState(): HouseholdState {
+  return {
+    records: [],
+    manualExpenses: [],
+    simulation: defaultSimulation,
+    lifePlan: createDefaultLifePlanInputs(),
+    fileName: "未取込",
+  };
+}
+
 function makeId(prefix: string) {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) return `${prefix}-${crypto.randomUUID()}`;
   return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
@@ -107,6 +119,11 @@ async function loadRemoteState(monthKey: string) {
   }>(response);
 }
 
+async function loadHistory() {
+  const response = await fetch("/api/history", { cache: "no-store" });
+  return responseJson<{ entries: HistoryEntry[] }>(response);
+}
+
 async function saveRemoteState(
   state: HouseholdState,
   monthKey: string,
@@ -130,10 +147,14 @@ export default function Home() {
   const [lifePlan, setLifePlan] = useState<LifePlanInputs>(defaultLifePlan);
   const [simulationMode, setSimulationMode] = useState<SimulationMode>("base");
   const [fileName, setFileName] = useState("サンプル明細.xlsx");
-  const [monthKey] = useState(closingMonthKey);
+  const [monthKey, setMonthKey] = useState(closingMonthKey);
   const [closedAt, setClosedAt] = useState<string | null>(null);
+  const [historyEntries, setHistoryEntries] = useState<HistoryEntry[]>([]);
+  const [selectedHistoryMonth, setSelectedHistoryMonth] = useState<string | null>(null);
   const [isDemo, setIsDemo] = useState(true);
   const [hydrated, setHydrated] = useState(false);
+  const [historyReady, setHistoryReady] = useState(false);
+  const [loadedMonthKey, setLoadedMonthKey] = useState<string | null>(null);
   const [syncStatus, setSyncStatus] = useState<SyncStatus>("loading");
   const [importing, setImporting] = useState(false);
   const [isClosing, setIsClosing] = useState(false);
@@ -153,41 +174,61 @@ export default function Home() {
 
   useEffect(() => {
     let cancelled = false;
-    const targetMonth = closingMonthKey();
-    const timer = window.setTimeout(() => {
-      void (async () => {
-        try {
-          const remote = await loadRemoteState(targetMonth);
-          if (cancelled) return;
+    void (async () => {
+      try {
+        const remoteHistory = await loadHistory();
+        if (cancelled) return;
+        setHistoryEntries(remoteHistory.entries);
+        setSelectedHistoryMonth((current) => current ?? remoteHistory.entries[0]?.monthKey ?? null);
+        const latestClosedMonth = remoteHistory.entries[0]?.monthKey;
+        const nextWorkMonth = latestClosedMonth ? nextMonthKey(latestClosedMonth) : closingMonthKey();
+        if (nextWorkMonth !== monthKey) setMonthKey(nextWorkMonth);
+      } catch (caught) {
+        if (cancelled) return;
+        if (caught instanceof AuthenticationRequiredError) {
+          router.replace("/login");
+          return;
+        }
+        setError(caught instanceof Error ? caught.message : "月次履歴を読み込めませんでした。");
+      } finally {
+        if (!cancelled) setHistoryReady(true);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [monthKey, router]);
 
-          const remoteState = parseHouseholdState(remote.state);
-          if (remoteState) {
-            setRecords(remoteState.records);
-            setManualExpenses(remoteState.manualExpenses);
-            setSimulation({ ...defaultSimulation, ...remoteState.simulation });
-            setLifePlan(remoteState.lifePlan);
-            setFileName(remoteState.fileName || "保存済み明細");
-            setIsDemo(false);
-            setClosedAt(remote.closedAt ?? null);
-            if (remote.source === "legacy") {
-              const saved = await saveRemoteState(remoteState, targetMonth, null, null);
-              if (cancelled) return;
-              revisionRef.current = saved.revision;
-              setNotice(`${formatMonthLabel(targetMonth)}の月次保存へ移行しました。`);
-            } else {
-              revisionRef.current = remote.revision;
-            }
-            lastSavedJsonRef.current = JSON.stringify(remoteState);
-            setSyncStatus("saved");
-            localStorage.removeItem(STORAGE_KEY);
-            return;
+  useEffect(() => {
+    if (!historyReady) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const remote = await loadRemoteState(monthKey);
+        if (cancelled) return;
+
+        const remoteState = parseHouseholdState(remote.state);
+        if (remoteState) {
+          setRecords(remoteState.records);
+          setManualExpenses(remoteState.manualExpenses);
+          setSimulation({ ...defaultSimulation, ...remoteState.simulation });
+          setLifePlan(remoteState.lifePlan);
+          setFileName(remoteState.fileName || "保存済み明細");
+          setIsDemo(false);
+          setClosedAt(remote.closedAt ?? null);
+          if (remote.source === "legacy") {
+            revisionRef.current = null;
+            setNotice(`${formatMonthLabel(monthKey)}分の旧保存データを下書きとして読み込みました。`);
+          } else {
+            revisionRef.current = remote.revision;
           }
-
+          lastSavedJsonRef.current = JSON.stringify(remoteState);
+          setSyncStatus("saved");
+          localStorage.removeItem(STORAGE_KEY);
+        } else {
           const legacyText = localStorage.getItem(STORAGE_KEY);
           const legacyState = legacyText ? parseHouseholdState(JSON.parse(legacyText)) : null;
           if (legacyState) {
-            const saved = await saveRemoteState(legacyState, targetMonth, null);
-            if (cancelled) return;
             setRecords(legacyState.records);
             setManualExpenses(legacyState.manualExpenses);
             setSimulation({ ...defaultSimulation, ...legacyState.simulation });
@@ -195,18 +236,11 @@ export default function Home() {
             setFileName(legacyState.fileName || "移行済み明細");
             setIsDemo(false);
             setClosedAt(null);
-            revisionRef.current = saved.revision;
+            revisionRef.current = null;
             lastSavedJsonRef.current = JSON.stringify(legacyState);
-            localStorage.removeItem(STORAGE_KEY);
-            setNotice(`${formatMonthLabel(targetMonth)}へ端末内の保存データを移行しました。`);
+            setNotice(`${formatMonthLabel(monthKey)}分の端末内データを下書きとして読み込みました。`);
           } else {
-            const emptyState: HouseholdState = {
-              records: [],
-              manualExpenses: [],
-              simulation: defaultSimulation,
-              lifePlan: createDefaultLifePlanInputs(),
-              fileName: "未取込",
-            };
+            const emptyState = emptyHouseholdState();
             setRecords(emptyState.records);
             setManualExpenses(emptyState.manualExpenses);
             setSimulation(emptyState.simulation);
@@ -218,28 +252,28 @@ export default function Home() {
             lastSavedJsonRef.current = JSON.stringify(emptyState);
           }
           setSyncStatus("saved");
-        } catch (caught) {
-          if (cancelled) return;
-          if (caught instanceof AuthenticationRequiredError) {
-            router.replace("/login");
-            return;
-          }
-          setSyncStatus("error");
-          setError(caught instanceof Error ? caught.message : "保存データを読み込めませんでした。");
-        } finally {
-          if (!cancelled) setHydrated(true);
         }
-      })();
-    }, 0);
+        setLoadedMonthKey(monthKey);
+      } catch (caught) {
+        if (cancelled) return;
+        if (caught instanceof AuthenticationRequiredError) {
+          router.replace("/login");
+          return;
+        }
+        setSyncStatus("error");
+        setError(caught instanceof Error ? caught.message : "保存データを読み込めませんでした。");
+      } finally {
+        if (!cancelled) setHydrated(true);
+      }
+    })();
 
     return () => {
       cancelled = true;
-      window.clearTimeout(timer);
     };
-  }, [router]);
+  }, [historyReady, monthKey, router]);
 
   useEffect(() => {
-    if (!hydrated || isDemo) return;
+    if (!hydrated || !historyReady || loadedMonthKey !== monthKey || isDemo) return;
     const state: HouseholdState = { records, manualExpenses, simulation, lifePlan, fileName };
     const serialized = JSON.stringify(state);
     if (serialized === lastSavedJsonRef.current) return;
@@ -264,7 +298,7 @@ export default function Home() {
     }, 900);
 
     return () => window.clearTimeout(timer);
-  }, [records, manualExpenses, simulation, lifePlan, fileName, monthKey, closedAt, hydrated, isDemo, router]);
+  }, [records, manualExpenses, simulation, lifePlan, fileName, monthKey, closedAt, historyReady, loadedMonthKey, hydrated, isDemo, router]);
 
   const amexAmount = useMemo(
     () => records.filter((record) => record.included).reduce((sum, record) => sum + record.amount, 0),
@@ -335,9 +369,22 @@ export default function Home() {
         const saved = await saveRemoteState(state, monthKey, revisionRef.current, closedAtValue);
         revisionRef.current = saved.revision;
         lastSavedJsonRef.current = JSON.stringify(state);
-        setClosedAt(saved.closedAt || closedAtValue);
+        const finishedMonth = monthKey;
+        const nextWorkMonth = nextMonthKey(finishedMonth);
+        setMonthKey(nextWorkMonth);
+        setLoadedMonthKey(null);
+        setRecords([]);
+        setManualExpenses([]);
+        setSimulation({ ...defaultSimulation, amexMonthly: 0 });
+        setFileName("未取込");
+        setClosedAt(null);
+        setIsDemo(false);
         setSyncStatus("saved");
-        setNotice(`${formatMonthLabel(monthKey)}分を月次締めしました。`);
+        setNotice(`${formatMonthLabel(finishedMonth)}分を締めました。${formatMonthLabel(nextWorkMonth)}分の作業を開始します。`);
+        void loadHistory().then((result) => {
+          setHistoryEntries(result.entries);
+          setSelectedHistoryMonth((current) => current ?? result.entries[0]?.monthKey ?? null);
+        }).catch(() => undefined);
       } catch (caught) {
         if (caught instanceof AuthenticationRequiredError) {
           router.replace("/login");
@@ -460,6 +507,7 @@ export default function Home() {
           <button className={view === "settlement" ? "active" : ""} onClick={() => setView("settlement")}>前月の精算</button>
           <button className={view === "simulation" ? "active" : ""} onClick={() => setView("simulation")}>将来支出</button>
           <button className={view === "lifeplan" ? "active" : ""} onClick={() => setView("lifeplan")}>ライフプラン</button>
+          <button className={view === "history" ? "active" : ""} onClick={() => setView("history")}>月次履歴</button>
         </nav>
         <div className="account-actions">
           <span className={`sync-status ${syncStatus}`}><span aria-hidden="true">●</span>{syncStatus === "loading" ? "読込中" : syncStatus === "saving" ? "保存中" : syncStatus === "error" ? "保存エラー" : "Sheets保存済み"}</span>
@@ -709,9 +757,11 @@ export default function Home() {
               </div>
             </div>
           </section>
-        ) : (
-          <LifePlanPanel value={lifePlan} onChange={updateLifePlan} />
-        )}
+            ) : view === "lifeplan" ? (
+              <LifePlanPanel value={lifePlan} onChange={updateLifePlan} />
+            ) : (
+              <HistoryPanel entries={historyEntries} selectedMonth={selectedHistoryMonth} onSelect={setSelectedHistoryMonth} />
+            )}
       </main>
 
       <footer>
@@ -725,5 +775,117 @@ export default function Home() {
 function MoneyInput({ label, value, onChange }: { label: string; value: number; onChange: (value: number) => void }) {
   return (
     <label>{label}<div className="input-with-suffix"><input type="number" min="0" value={value} onChange={(event) => onChange(Math.max(0, Number(event.target.value) || 0))} /><span>円</span></div></label>
+  );
+}
+
+function formatHistoryDate(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return new Intl.DateTimeFormat("ja-JP", {
+    timeZone: "Asia/Tokyo",
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(date);
+}
+
+function HistoryPanel({
+  entries,
+  selectedMonth,
+  onSelect,
+}: {
+  entries: HistoryEntry[];
+  selectedMonth: string | null;
+  onSelect: (monthKey: string) => void;
+}) {
+  const selected = entries.find((entry) => entry.monthKey === selectedMonth) ?? entries[0];
+
+  return (
+    <section className="history-page" aria-labelledby="history-title">
+      <div className="simulation-intro">
+        <div>
+          <p className="eyebrow">MONTHLY HISTORY</p>
+          <h1 id="history-title">締めた月を、<br />あとから確認する。</h1>
+        </div>
+        <p>月次締めを完了した月だけを一覧表示しています。明細、その他の費用、二人分の合計、一人あたりの金額を確認できます。</p>
+      </div>
+
+      {entries.length === 0 ? (
+        <div className="history-empty">まだ月次締め済みのデータがありません。</div>
+      ) : selected && (
+        <div className="history-grid">
+          <aside className="history-list" aria-label="月次履歴一覧">
+            <p className="section-number">MONTHS</p>
+            {entries.map((entry) => (
+              <button
+                key={entry.monthKey}
+                className={entry.monthKey === selected.monthKey ? "active" : ""}
+                onClick={() => onSelect(entry.monthKey)}
+              >
+                <span>{formatMonthLabel(entry.monthKey)}</span>
+                <strong>{formatYen(entry.total)}</strong>
+                <small>一人あたり {formatYen(entry.perPerson)}</small>
+              </button>
+            ))}
+          </aside>
+
+          <div className="history-detail">
+            <div className="history-detail-heading">
+              <div>
+                <p className="eyebrow">{formatMonthLabel(selected.monthKey)} / CLOSED</p>
+                <h2>{formatMonthLabel(selected.monthKey)}分の内訳</h2>
+              </div>
+              <span>締め日時 {formatHistoryDate(selected.closedAt)}</span>
+            </div>
+
+            <div className="history-kpis">
+              <div><span>一人あたり</span><strong>{formatYen(selected.perPerson)}</strong></div>
+              <div><span>二人分合計</span><strong>{formatYen(selected.total)}</strong></div>
+              <div><span>Amex</span><strong>{formatYen(selected.amexAmount)}</strong></div>
+              <div><span>その他費用</span><strong>{formatYen(selected.manualAmount)}</strong></div>
+            </div>
+
+            <div className="history-section">
+              <div className="section-heading compact">
+                <div><p className="section-number">01</p><h2>Amex明細</h2></div>
+                <span>{selected.includedCount}件対象 / {selected.excludedCount}件除外</span>
+              </div>
+              <div className="table-wrap">
+                <table>
+                  <thead>
+                    <tr><th scope="col">対象</th><th scope="col">利用日</th><th scope="col">利用内容</th><th scope="col">名義</th><th scope="col" className="number">金額</th></tr>
+                  </thead>
+                  <tbody>
+                    {selected.records.map((record) => (
+                      <tr key={record.id} className={record.included ? "included-row" : "excluded-row"}>
+                        <td>{record.included ? "対象" : "除外"}</td>
+                        <td>{record.date}</td>
+                        <td><strong>{record.description || "（明細名なし）"}</strong><small>{record.reasonLabel}</small></td>
+                        <td>{record.cardholder || "—"}</td>
+                        <td className="number"><strong>{formatYen(record.amount)}</strong><small>{record.amountSource}列</small></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div className="history-section">
+              <div className="section-heading compact"><div><p className="section-number">02</p><h2>その他の費用</h2></div></div>
+              {selected.manualExpenses.length === 0 ? <p className="empty-note">登録なし</p> : (
+                <div className="history-expenses">
+                  {selected.manualExpenses.map((expense) => (
+                    <div key={expense.id}>
+                      <span>{categoryLabels[expense.category]}{expense.recurring && "・毎月"}</span>
+                      <strong>{expense.label}</strong>
+                      <small>{formatYen(expense.amount)} × {expense.shareRate}% = {formatYen(expenseCharge(expense))}</small>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+    </section>
   );
 }

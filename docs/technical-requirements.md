@@ -65,6 +65,7 @@ app/
     auth/login/route.ts
     auth/logout/route.ts
     state/route.ts
+    history/route.ts
   login/
     page.tsx
     login-form.tsx
@@ -91,7 +92,7 @@ docs/
 
 ## 5. Google Spreadsheet設計
 
-アプリは既存Spreadsheetに対象月の `state_YYYY-MM` シートを自動作成し、その月の状態を分割JSONとして保存する。対象月は日本時間の前月であり、月次締めボタン押下時に `closedAt` を保存する。1セルあたりの文字数上限を避けるため、JSONは30,000文字ごとに分割する。過去の単一状態形式である `app_state` は、最初の締め対象月への初回アクセス時に対象月タブへ移行する。
+アプリは既存Spreadsheetに対象月の `state_YYYY-MM` シートを自動作成し、その月の状態を分割JSONとして保存する。対象月は日本時間の前月であり、月次締めボタン押下時に `closedAt` を保存する。1セルあたりの文字数上限を避けるため、JSONは30,000文字ごとに分割する。過去の単一状態形式である `app_state` は、最初の締め対象月への初回アクセス時に下書きとして読み込み、締め時に対象月タブへ保存する。
 
 | 列 | 内容 |
 |---|---|
@@ -114,6 +115,7 @@ docs/
 | GET | `/api/state?month=YYYY-MM` | Google Sheetsから対象月の状態、締め状態、revisionを取得 |
 | PUT | `/api/state?month=YYYY-MM` | expectedRevisionを照合し、対象月の状態と締め状態を保存 |
 | DELETE | `/api/state?month=YYYY-MM` | expectedRevisionを照合し、対象月の保存状態を削除 |
+| GET | `/api/history` | 締め済みの月別履歴を取得 |
 
 ### 6.1 入力検証
 
@@ -250,7 +252,7 @@ ProductionとPreviewで値を分離する。Previewでは本番Spreadsheetを使
 | ホスティング | Vercel CLIでモック公開済み | GitHub連携Productionへ切替待ち |
 | 保存 | Google Sheets API実装済み | 環境変数設定後に接続確認 |
 | 認証 | 共有パスワード・署名Cookie実装済み | ハッシュと署名鍵の設定待ち |
-| 履歴 | `state_YYYY-MM` タブへ月別保存、`closedAt`を保持 | 過去月UIは将来拡張 |
+| 履歴 | `state_YYYY-MM` タブへ月別保存、`closedAt`を保持、`/api/history`で表示 | 精算結果のエクスポートは将来拡張 |
 | 複数端末 | revision付き最新状態を共有 | 実Spreadsheetで結合テスト待ち |
 | ライフプラン | 10機能の月次計算・入力・結果表示を実装済み | 実データ入力後の前提調整待ち |
 
