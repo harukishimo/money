@@ -55,11 +55,22 @@ export default function PersonalAssetsPanel({
   const addAccount = () => {
     const balance = moneyValue(accountForm.balance);
     if (!accountForm.name.trim() || balance === null) return;
+    const id = makeId("account");
     onChange({
       ...state,
-      accounts: [...state.accounts, { id: makeId("account"), name: accountForm.name.trim(), balance }],
+      accounts: [...state.accounts, { id, name: accountForm.name.trim(), balance }],
+      mainAccountId: state.mainAccountId ?? (state.accounts.length === 0 ? id : null),
     });
     setAccountForm({ name: "", balance: "" });
+  };
+
+  const removeAccount = (id: string) => {
+    const nextAccounts = state.accounts.filter((account) => account.id !== id);
+    onChange({
+      ...state,
+      accounts: nextAccounts,
+      mainAccountId: state.mainAccountId === id ? (nextAccounts[0]?.id ?? null) : state.mainAccountId,
+    });
   };
 
   const addInvestment = () => {
@@ -122,7 +133,8 @@ export default function PersonalAssetsPanel({
           </div>
 
           <details open>
-            <summary>口座残高</summary>
+            <summary>口座残高・メイン口座</summary>
+            <p className="detail-note">メイン口座を1つ選ぶと、給料・請求額を除いた残高と当月の残額を計算します。</p>
             <div className="personal-form-row">
               <input value={accountForm.name} placeholder="口座名" onChange={(event) => setAccountForm({ ...accountForm, name: event.target.value })} />
               <input inputMode="numeric" value={accountForm.balance} placeholder="残高" onChange={(event) => setAccountForm({ ...accountForm, balance: event.target.value })} />
@@ -130,7 +142,19 @@ export default function PersonalAssetsPanel({
             </div>
             <div className="personal-entry-list">
               {state.accounts.map((account) => (
-                <div key={account.id}><span>{account.name}</span><strong>{formatYen(account.balance)}</strong><button aria-label={`${account.name}を削除`} onClick={() => onChange({ ...state, accounts: state.accounts.filter((item) => item.id !== account.id) })}>×</button></div>
+                <div key={account.id}>
+                  <label className="main-account-option">
+                    <input
+                      type="radio"
+                      name="main-account"
+                      checked={state.mainAccountId === account.id}
+                      onChange={() => onChange({ ...state, mainAccountId: account.id })}
+                    />
+                    <span>{account.name}<small>{state.mainAccountId === account.id ? "メイン口座" : "その他の口座"}</small></span>
+                  </label>
+                  <strong>{formatYen(account.balance)}</strong>
+                  <button aria-label={`${account.name}を削除`} onClick={() => removeAccount(account.id)}>×</button>
+                </div>
               ))}
               {state.accounts.length === 0 && <p className="empty-note">口座残高を登録してください。</p>}
             </div>
@@ -178,8 +202,10 @@ export default function PersonalAssetsPanel({
             <p className="section-number">02 / MONTHLY CASH FLOW</p>
             <h2>今月、残るお金</h2>
             <strong className={result.remainingMoney < 0 ? "personal-negative" : ""}>{formatYen(result.remainingMoney)}</strong>
-            <p>（自分の給料 {formatYen(result.salary)} ＋ 請求額 {formatYen(result.claimAmount)}）− Amex全明細 {formatYen(result.amexStatementAmount)} − その他 {formatYen(result.otherAmount)}</p>
+            <p>（メイン口座の基礎残高 {formatYen(result.mainAccountBaseBalance)} ＋ 自分の給料 {formatYen(result.salary)} ＋ 請求額 {formatYen(result.claimAmount)}）− Amex全明細 {formatYen(result.amexStatementAmount)} − その他 {formatYen(result.otherAmount)}</p>
             <div className="personal-cashflow-breakdown">
+              <div><span>メイン口座全額</span><strong>{formatYen(result.mainAccountBalance)}</strong></div>
+              <div><span>給料・請求額を除いた残高</span><strong>{formatYen(result.mainAccountBaseBalance)}</strong></div>
               <div><span>共有費用</span><strong>{formatYen(result.sharedOtherAmount)}</strong></div>
               <div><span>個人支出</span><strong>{formatYen(result.personalExpenseAmount)}</strong></div>
               <div><span>対象月</span><strong>{formatMonthLabel(selectedMonth)}</strong></div>
@@ -189,7 +215,7 @@ export default function PersonalAssetsPanel({
           <div className="personal-kpis">
             <div><span>口座残高合計</span><strong>{formatYen(result.accountTotal)}</strong></div>
             <div><span>投資元本合計</span><strong>{formatYen(result.investmentPrincipal)}</strong></div>
-            <div><span>現時点の総資産</span><strong>{formatYen(result.totalAssets)}</strong><small>口座＋投資元本＋残るお金</small></div>
+            <div><span>現時点の総資産</span><strong>{formatYen(result.totalAssets)}</strong><small>{state.mainAccountId ? "その他口座＋投資元本＋メイン口座の残額" : "口座＋投資元本＋残るお金"}</small></div>
             <div><span>投資に使える金額</span><strong>{formatYen(result.investableAmount)}</strong><small>予備資金 {formatYen(result.reserveTarget)}を確保後</small></div>
           </div>
 

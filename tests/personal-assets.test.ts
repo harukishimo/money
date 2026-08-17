@@ -6,6 +6,7 @@ const state = {
   monthlySalary: 300000,
   reserveTarget: 100000,
   accounts: [{ id: "bank", name: "生活口座", balance: 500000 }],
+  mainAccountId: "bank",
   investments: [{ id: "fund", name: "投資信託", amount: 100000, returnRate: 10 }],
   personalExpenses: [{ id: "hobby", monthKey: "2026-07", label: "趣味", amount: 20000 }],
 };
@@ -19,19 +20,24 @@ test("personal assets calculate remaining money and total assets", () => {
     amexStatementAmount: 228710,
     otherAmount: 60000,
   });
-  assert.equal(result.remainingMoney, 41290);
+  assert.equal(result.mainAccountBalance, 500000);
+  assert.equal(result.mainAccountBaseBalance, 150000);
+  assert.equal(result.monthlyCashflow, 41290);
+  assert.equal(result.remainingMoney, 191290);
   assert.equal(result.accountTotal, 500000);
   assert.equal(result.investmentPrincipal, 100000);
-  assert.equal(result.totalAssets, 641290);
-  assert.equal(result.investableAmount, 541290);
-  assert.equal(result.incomeGainBudget, 433032);
-  assert.equal(result.capitalGainBudget, 108258);
+  assert.equal(result.totalAssets, 291290);
+  assert.equal(result.investableAmount, 191290);
+  assert.equal(result.incomeGainBudget, 153032);
+  assert.equal(result.capitalGainBudget, 38258);
   assert.equal(result.investmentEstimatedValue, 110000);
-  assert.equal(result.monthlyProjection[0].estimatedAssets, 682580);
+  assert.equal(result.monthlyProjection[0].estimatedAssets, 332580);
 });
 
 test("personal asset state rejects invalid private data", () => {
   assert.equal(parsePersonalAssetsState({ ...state, personalExpenses: [{ ...state.personalExpenses[0], monthKey: "2026-13" }] }), null);
   assert.equal(parsePersonalAssetsState({ ...state, investments: [{ ...state.investments[0], returnRate: -101 }] }), null);
   assert.equal(parsePersonalAssetsState({ ...state, accounts: [{ ...state.accounts[0], balance: -1 }] }), null);
+  assert.equal(parsePersonalAssetsState({ ...state, mainAccountId: "missing" }), null);
+  assert.equal(parsePersonalAssetsState({ ...state, mainAccountId: undefined })?.mainAccountId, null);
 });

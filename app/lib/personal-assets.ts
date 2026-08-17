@@ -24,6 +24,7 @@ export interface PersonalAssetsState {
   monthlySalary: number;
   reserveTarget: number;
   accounts: PersonalAccount[];
+  mainAccountId: string | null;
   investments: PersonalInvestment[];
   personalExpenses: PersonalExpense[];
 }
@@ -48,6 +49,9 @@ export interface PersonalFinanceResult {
   sharedOtherAmount: number;
   personalExpenseAmount: number;
   otherAmount: number;
+  mainAccountBalance: number;
+  mainAccountBaseBalance: number;
+  monthlyCashflow: number;
   remainingMoney: number;
   accountTotal: number;
   investmentPrincipal: number;
@@ -110,6 +114,7 @@ export function createDefaultPersonalAssetsState(): PersonalAssetsState {
     monthlySalary: 0,
     reserveTarget: 100000,
     accounts: [],
+    mainAccountId: null,
     investments: [],
     personalExpenses: [],
   };
@@ -130,10 +135,16 @@ export function parsePersonalAssetsState(value: unknown): PersonalAssetsState | 
     || !value.personalExpenses.every(isPersonalExpense)) {
     return null;
   }
+  const mainAccountId = value.mainAccountId === undefined ? null : value.mainAccountId;
+  if (mainAccountId !== null
+    && (typeof mainAccountId !== "string" || !value.accounts.some((account) => account.id === mainAccountId))) {
+    return null;
+  }
   return {
     monthlySalary: value.monthlySalary,
     reserveTarget: value.reserveTarget,
     accounts: value.accounts.map((account) => ({ ...account, name: account.name.trim() })),
+    mainAccountId,
     investments: value.investments.map((investment) => ({ ...investment, name: investment.name.trim() })),
     personalExpenses: value.personalExpenses.map((expense) => ({ ...expense, label: expense.label.trim() })),
   };
@@ -147,15 +158,24 @@ export function calculatePersonalFinance(
     .filter((expense) => expense.monthKey === month.monthKey)
     .reduce((sum, expense) => sum + expense.amount, 0);
   const otherAmount = month.otherAmount + personalExpenseAmount;
-  const remainingMoney = state.monthlySalary + month.claimAmount - month.amexStatementAmount - otherAmount;
+  const monthlyCashflow = state.monthlySalary + month.claimAmount - month.amexStatementAmount - otherAmount;
   const accountTotal = state.accounts.reduce((sum, account) => sum + account.balance, 0);
+  const mainAccount = state.accounts.find((account) => account.id === state.mainAccountId);
+  const mainAccountBalance = mainAccount?.balance ?? 0;
+  const mainAccountBaseBalance = mainAccount
+    ? mainAccountBalance - state.monthlySalary - month.claimAmount
+    : 0;
+  const remainingMoney = mainAccount
+    ? mainAccountBaseBalance + state.monthlySalary + month.claimAmount - month.amexStatementAmount - otherAmount
+    : monthlyCashflow;
   const investmentPrincipal = state.investments.reduce((sum, investment) => sum + investment.amount, 0);
   const investmentEstimatedValue = state.investments.reduce(
     (sum, investment) => sum + Math.round(investment.amount * (1 + investment.returnRate / 100)),
     0,
   );
   const investmentGain = investmentEstimatedValue - investmentPrincipal;
-  const totalAssets = accountTotal + investmentPrincipal + remainingMoney;
+  const accountTotalExcludingMain = mainAccount ? accountTotal - mainAccountBalance : accountTotal;
+  const totalAssets = accountTotalExcludingMain + investmentPrincipal + remainingMoney;
   const investableAmount = Math.max(0, totalAssets - state.reserveTarget);
   const monthlyProjection = Array.from({ length: 12 }, (_, index) => {
     const monthNumber = index + 1;
@@ -163,7 +183,7 @@ export function calculatePersonalFinance(
     return {
       monthKey,
       label: formatMonthLabel(monthKey),
-      estimatedAssets: totalAssets + remainingMoney * monthNumber,
+      estimatedAssets: totalAssets + monthlyCashflow * monthNumber,
     };
   });
 
@@ -174,6 +194,9 @@ export function calculatePersonalFinance(
     sharedOtherAmount: month.otherAmount,
     personalExpenseAmount,
     otherAmount,
+    mainAccountBalance,
+    mainAccountBaseBalance,
+    monthlyCashflow,
     remainingMoney,
     accountTotal,
     investmentPrincipal,
