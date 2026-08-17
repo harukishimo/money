@@ -137,6 +137,20 @@ export function parseAmexRows(rows: unknown[][]): AmexTransaction[] {
   });
 }
 
+/**
+ * Calculate the amount that will actually be withdrawn from the Amex account.
+ *
+ * This intentionally ignores the household settlement filter (`included`):
+ * the personal cash-flow view must account for every statement line, regardless
+ * of cardholder, while the previous-month account transfer is only a history
+ * line and must not be counted as a new expense.
+ */
+export function sumAmexStatementAmount(records: AmexTransaction[]) {
+  return records
+    .filter((record) => record.reason !== "transfer" && !record.locked)
+    .reduce((sum, record) => sum + record.amount, 0);
+}
+
 export function extractStatementMonth(rows: unknown[][]): string | null {
   const headerText = rows
     .slice(0, 7)

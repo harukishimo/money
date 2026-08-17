@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { buildProjection, parseAmexRows, parseMoney } from "../app/lib/finance.ts";
+import { buildProjection, parseAmexRows, parseMoney, sumAmexStatementAmount } from "../app/lib/finance.ts";
 
 const meta = Array.from({ length: 7 }, () => []);
 
@@ -25,6 +25,17 @@ test("H column zero is still preferred over F", () => {
   const parsed = parseAmexRows([...meta, ["", "", "SHOP", "CHIHARU SATO", "", 1200, "", 0]]);
   assert.equal(parsed[0].amount, 0);
   assert.equal(parsed[0].amountSource, "H");
+});
+
+test("personal cash flow uses every Amex statement line except previous transfer", () => {
+  const parsed = parseAmexRows([
+    ...meta,
+    ["2026/08/01", "", "PARTNER SHOP", "OTHER USER", "", 2000, "", null],
+    ["2026/08/02", "", "ETC TOKYO", "OTHER USER", "", 500, "", null],
+    ["2026/08/03", "", "前回分口座振替金額", "CHIHARU SATO", "", 99000, "", null],
+  ]);
+  assert.equal(parsed.filter((row) => row.included).reduce((sum, row) => sum + row.amount, 0), 500);
+  assert.equal(sumAmexStatementAmount(parsed), 2500);
 });
 
 test("money parser supports yen strings and accounting negatives", () => {

@@ -16,7 +16,7 @@ test("personal assets calculate remaining money and total assets", () => {
   const result = calculatePersonalFinance(parsed, {
     monthKey: "2026-07",
     claimAmount: 50000,
-    amexAmount: 228710,
+    amexStatementAmount: 228710,
     otherAmount: 60000,
   });
   assert.equal(result.remainingMoney, 41290);

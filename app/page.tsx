@@ -10,6 +10,7 @@ import {
   formatYen,
   parseAmexRows,
   parseCsv,
+  sumAmexStatementAmount,
   type AmexTransaction,
   type SimulationInputs,
   type SimulationMode,
@@ -443,6 +444,7 @@ export default function Home() {
     () => records.filter((record) => record.included).reduce((sum, record) => sum + record.amount, 0),
     [records],
   );
+  const amexStatementAmount = useMemo(() => sumAmexStatementAmount(records), [records]);
   const manualAmount = useMemo(
     () => manualExpenses.reduce((sum, expense) => sum + expenseCharge(expense), 0),
     [manualExpenses],
@@ -458,7 +460,7 @@ export default function Home() {
     summaries.set(monthKey, {
       monthKey,
       claimAmount: perPersonSettlement,
-      amexAmount,
+      amexStatementAmount,
       otherAmount: manualAmount,
     });
     for (const entry of historyEntries) {
@@ -466,13 +468,13 @@ export default function Home() {
         summaries.set(entry.monthKey, {
           monthKey: entry.monthKey,
           claimAmount: entry.perPerson,
-          amexAmount: entry.amexAmount,
+          amexStatementAmount: sumAmexStatementAmount(entry.records),
           otherAmount: entry.manualAmount,
         });
       }
     }
     return [...summaries.values()];
-  }, [amexAmount, historyEntries, manualAmount, monthKey, perPersonSettlement]);
+  }, [amexStatementAmount, historyEntries, manualAmount, monthKey, perPersonSettlement]);
 
   const projections = useMemo(
     () => Object.fromEntries(modes.map(({ key }) => [key, buildProjection(simulation, key)])) as Record<SimulationMode, ReturnType<typeof buildProjection>>,

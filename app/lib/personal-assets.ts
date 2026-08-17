@@ -31,7 +31,7 @@ export interface PersonalAssetsState {
 export interface PersonalMonthSummary {
   monthKey: string;
   claimAmount: number;
-  amexAmount: number;
+  amexStatementAmount: number;
   otherAmount: number;
 }
 
@@ -44,7 +44,7 @@ export interface PersonalProjectionRow {
 export interface PersonalFinanceResult {
   salary: number;
   claimAmount: number;
-  amexAmount: number;
+  amexStatementAmount: number;
   sharedOtherAmount: number;
   personalExpenseAmount: number;
   otherAmount: number;
@@ -147,7 +147,7 @@ export function calculatePersonalFinance(
     .filter((expense) => expense.monthKey === month.monthKey)
     .reduce((sum, expense) => sum + expense.amount, 0);
   const otherAmount = month.otherAmount + personalExpenseAmount;
-  const remainingMoney = state.monthlySalary + month.claimAmount - month.amexAmount - otherAmount;
+  const remainingMoney = state.monthlySalary + month.claimAmount - month.amexStatementAmount - otherAmount;
   const accountTotal = state.accounts.reduce((sum, account) => sum + account.balance, 0);
   const investmentPrincipal = state.investments.reduce((sum, investment) => sum + investment.amount, 0);
   const investmentEstimatedValue = state.investments.reduce(
@@ -170,7 +170,7 @@ export function calculatePersonalFinance(
   return {
     salary: state.monthlySalary,
     claimAmount: month.claimAmount,
-    amexAmount: month.amexAmount,
+    amexStatementAmount: month.amexStatementAmount,
     sharedOtherAmount: month.otherAmount,
     personalExpenseAmount,
     otherAmount,

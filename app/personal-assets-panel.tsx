@@ -46,7 +46,7 @@ export default function PersonalAssetsPanel({
   const selectedSummary = monthSummaries.find((summary) => summary.monthKey === selectedMonth) ?? {
     monthKey: selectedMonth,
     claimAmount: 0,
-    amexAmount: 0,
+    amexStatementAmount: 0,
     otherAmount: 0,
   };
   const result = calculatePersonalFinance(state, selectedSummary);
@@ -178,7 +178,7 @@ export default function PersonalAssetsPanel({
             <p className="section-number">02 / MONTHLY CASH FLOW</p>
             <h2>今月、残るお金</h2>
             <strong className={result.remainingMoney < 0 ? "personal-negative" : ""}>{formatYen(result.remainingMoney)}</strong>
-            <p>（自分の給料 {formatYen(result.salary)} ＋ 請求額 {formatYen(result.claimAmount)}）− Amex {formatYen(result.amexAmount)} − その他 {formatYen(result.otherAmount)}</p>
+            <p>（自分の給料 {formatYen(result.salary)} ＋ 請求額 {formatYen(result.claimAmount)}）− Amex全明細 {formatYen(result.amexStatementAmount)} − その他 {formatYen(result.otherAmount)}</p>
             <div className="personal-cashflow-breakdown">
               <div><span>共有費用</span><strong>{formatYen(result.sharedOtherAmount)}</strong></div>
               <div><span>個人支出</span><strong>{formatYen(result.personalExpenseAmount)}</strong></div>
