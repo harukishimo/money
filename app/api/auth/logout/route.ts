@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { sessionCookieOptions } from "../../../lib/auth";
+import { adminSessionCookieOptions, sessionCookieOptions } from "../../../lib/auth";
 
 export const runtime = "nodejs";
 
@@ -9,5 +9,6 @@ export async function POST() {
     { headers: { "Cache-Control": "private, no-store" } },
   );
   response.cookies.set({ ...sessionCookieOptions(), value: "", maxAge: 0 });
+  response.cookies.set({ ...adminSessionCookieOptions(), value: "", maxAge: 0 });
   return response;
 }

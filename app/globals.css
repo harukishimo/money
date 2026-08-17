@@ -295,6 +295,79 @@ input:focus, select:focus { border-color: var(--accent); outline: none; }
 .wishlist-remove:hover { color: var(--danger); }
 .wishlist-empty { padding: 30px 0 10px; color: var(--muted); font-size: 12px; }
 
+.personal-assets-page { padding-top: 54px; }
+.personal-assets-intro-actions { display: grid; gap: 18px; align-items: end; }
+.personal-assets-intro-actions > p { margin: 0; color: var(--muted); line-height: 1.9; font-size: 13px; }
+.personal-assets-intro-actions .secondary-button { width: fit-content; margin: 0; }
+.personal-month-toolbar { display: flex; justify-content: space-between; align-items: end; gap: 24px; padding: 25px 0 0; }
+.personal-month-toolbar label { display: grid; gap: 7px; width: min(280px, 100%); color: var(--muted); font-size: 10px; }
+.personal-month-toolbar select { font-size: 13px; }
+.personal-month-toolbar > span { color: var(--muted); font-size: 10px; }
+.personal-assets-layout { display: grid; grid-template-columns: 350px minmax(0, 1fr); gap: 50px; padding-top: 40px; align-items: start; }
+.personal-input-panel { min-width: 0; border-right: 1px solid var(--line); padding-right: 30px; }
+.personal-base-form { display: grid; gap: 13px; margin-bottom: 28px; }
+.personal-base-form label, .personal-small-label { display: grid; gap: 6px; color: var(--muted); font-size: 10px; }
+.personal-input-panel details { border-top: 1px solid var(--line); }
+.personal-input-panel details:last-of-type { border-bottom: 1px solid var(--line); }
+.personal-input-panel summary { list-style: none; padding: 16px 2px; cursor: pointer; font: 500 17px Georgia, "Yu Mincho", serif; display: flex; justify-content: space-between; align-items: center; }
+.personal-input-panel summary::-webkit-details-marker { display: none; }
+.personal-input-panel summary::after { content: "+"; color: var(--accent); font: 20px system-ui; }
+.personal-input-panel details[open] summary::after { content: "−"; }
+.personal-input-panel details[open] { padding-bottom: 18px; }
+.personal-form-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 68px; gap: 7px; align-items: end; }
+.personal-form-row .secondary-button { min-height: 42px; padding: 8px; margin: 0; width: auto; font-size: 10px; }
+.investment-form-row { grid-template-columns: minmax(0, 1fr) 90px 68px; }
+.personal-form-stack { display: grid; gap: 9px; }
+.personal-entry-list { margin-top: 15px; border-top: 1px solid var(--line); }
+.personal-entry-list > div { display: grid; grid-template-columns: minmax(0, 1fr) auto 22px; gap: 8px; align-items: center; padding: 11px 0; border-bottom: 1px solid #e9e5da; }
+.personal-entry-list span { min-width: 0; font-size: 11px; }
+.personal-entry-list span small { display: block; margin-top: 3px; color: var(--muted); font-size: 9px; }
+.personal-entry-list strong { font: 500 15px Georgia, serif; white-space: nowrap; }
+.personal-entry-list button { border: 0; background: transparent; color: var(--muted); cursor: pointer; font-size: 18px; }
+.personal-results { min-width: 0; }
+.personal-formula-card { padding: 28px; border-left: 6px solid var(--accent); background: var(--surface); }
+.personal-formula-card h2 { margin: 0; font: 500 28px Georgia, "Yu Mincho", serif; }
+.personal-formula-card > strong { display: block; margin-top: 14px; font: 500 clamp(50px, 6vw, 86px) Georgia, serif; letter-spacing: -.05em; white-space: nowrap; }
+.personal-formula-card > p:not(.section-number) { margin: 14px 0 0; color: var(--muted); font-size: 11px; line-height: 1.8; }
+.personal-negative { color: var(--danger) !important; }
+.personal-cashflow-breakdown { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; margin-top: 23px; padding-top: 16px; border-top: 1px solid var(--line); }
+.personal-cashflow-breakdown span { display: block; color: var(--muted); font-size: 10px; }
+.personal-cashflow-breakdown strong { display: block; margin-top: 5px; font: 500 17px Georgia, serif; }
+.personal-kpis { display: grid; grid-template-columns: repeat(4, 1fr); margin-top: 24px; border: 1px solid var(--line); background: var(--surface); }
+.personal-kpis > div { min-width: 0; min-height: 116px; padding: 18px; border-right: 1px solid var(--line); }
+.personal-kpis > div:last-child { border-right: 0; }
+.personal-kpis span, .personal-kpis small { display: block; color: var(--muted); font-size: 9px; }
+.personal-kpis strong { display: block; margin-top: 10px; font: 500 clamp(17px, 2vw, 26px) Georgia, serif; white-space: nowrap; }
+.personal-kpis small { margin-top: 7px; line-height: 1.5; }
+.personal-investment-card, .personal-forecast-card { margin-top: 24px; padding: 26px; border: 1px solid var(--line); background: var(--surface); }
+.personal-investment-card .section-heading > span, .personal-forecast-card .section-heading > span { color: var(--accent); font-size: 10px; }
+.personal-allocation-grid { display: grid; grid-template-columns: repeat(2, 1fr); margin-top: 20px; border-top: 1px solid var(--line); border-left: 1px solid var(--line); }
+.personal-allocation-grid > div { padding: 18px; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.personal-allocation-grid span, .personal-allocation-grid small { display: block; color: var(--muted); font-size: 10px; }
+.personal-allocation-grid strong { display: block; margin: 8px 0 4px; font: 500 25px Georgia, serif; }
+.personal-investment-table { border-top: 1px solid var(--line); }
+.personal-investment-table > div { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 22px; align-items: center; padding: 14px 0; border-bottom: 1px solid #e9e5da; }
+.personal-investment-table span { font-size: 12px; }
+.personal-investment-table span small, .personal-investment-table strong small { display: block; margin-top: 4px; color: var(--muted); font-size: 9px; font-weight: 400; }
+.personal-investment-table strong { font: 500 17px Georgia, serif; white-space: nowrap; }
+.detail-note { color: var(--muted); font-size: 10px; line-height: 1.7; }
+.personal-forecast-list { display: grid; gap: 12px; margin-top: 20px; }
+.personal-forecast-row { display: grid; grid-template-columns: 70px minmax(80px, 1fr) 125px; gap: 13px; align-items: center; font-size: 10px; }
+.personal-forecast-row > span { color: var(--muted); }
+.personal-forecast-row > div { height: 17px; background: #ece8de; overflow: hidden; }
+.personal-forecast-row i { display: block; height: 100%; background: linear-gradient(90deg, var(--mint-dark), var(--mint)); }
+.personal-forecast-row > strong { text-align: right; font: 500 14px Georgia, serif; white-space: nowrap; }
+.personal-forecast-row.negative > div i { background: var(--danger); }
+.personal-forecast-row.negative > strong { color: var(--danger); }
+.personal-gate { min-height: 620px; display: grid; place-items: center; padding: 58px 0; }
+.personal-gate-card { width: min(520px, 100%); padding: clamp(28px, 5vw, 52px); border: 1px solid var(--line); border-top: 6px solid var(--ink); background: var(--surface); box-shadow: 0 24px 70px rgba(23, 49, 47, .08); }
+.personal-gate-card h1 { margin: 0; font: 500 clamp(36px, 6vw, 58px) Georgia, "Yu Mincho", serif; }
+.personal-gate-card > p:not(.eyebrow):not(.login-error):not(.personal-gate-note) { margin: 18px 0 25px; color: var(--muted); font-size: 12px; line-height: 1.9; }
+.personal-gate-card label { display: grid; gap: 7px; color: var(--muted); font-size: 11px; }
+.personal-gate-card .primary-button { width: 100%; margin-top: 15px; }
+.personal-gate-card > small { display: block; margin-top: 20px; color: var(--muted); font-size: 9px; line-height: 1.6; }
+.personal-gate-note { color: var(--muted); font-size: 11px; }
+
 .life-plan-page { padding-top: 54px; }
 .life-plan-intro { padding-top: 30px; }
 .life-scenario-tabs { display: grid; grid-template-columns: repeat(3, 1fr); border: 1px solid var(--line); border-top: 0; background: rgba(255, 253, 247, .35); }
@@ -416,6 +489,8 @@ footer button { border: 0; border-bottom: 1px solid var(--muted); background: tr
   .history-grid { grid-template-columns: 1fr; }
   .wishlist-layout { grid-template-columns: 1fr; }
   .wishlist-form-panel { border-right: 0; border-bottom: 1px solid var(--line); padding: 0 0 35px; }
+  .personal-assets-layout { grid-template-columns: 1fr; }
+  .personal-input-panel { border-right: 0; border-bottom: 1px solid var(--line); padding: 0 0 35px; }
   .history-list { display: grid; grid-template-columns: repeat(3, 1fr); border-top: 0; gap: 10px; }
   .history-list .section-number { grid-column: 1 / -1; }
   .history-list button { border: 1px solid var(--line); }
@@ -475,6 +550,24 @@ footer button { border: 0; border-bottom: 1px solid var(--muted); background: tr
   .wishlist-kpis > div:first-child { grid-column: 1 / -1; border-right: 0; border-bottom: 1px solid var(--line); }
   .wishlist-kpis > div:nth-child(2) { border-right: 0; }
   .wishlist-item { grid-template-columns: minmax(0, 1fr) auto 22px; gap: 10px; }
+  .personal-assets-page { padding-top: 28px; }
+  .personal-assets-intro-actions { margin-top: 26px; }
+  .personal-month-toolbar { display: block; padding-top: 20px; }
+  .personal-month-toolbar label { width: 100%; }
+  .personal-month-toolbar > span { display: block; margin-top: 12px; }
+  .personal-assets-layout { padding-top: 30px; gap: 30px; }
+  .personal-formula-card { padding: 21px 16px; }
+  .personal-formula-card > strong { font-size: 52px; }
+  .personal-cashflow-breakdown { grid-template-columns: 1fr 1fr; }
+  .personal-cashflow-breakdown > div:last-child { grid-column: 1 / -1; }
+  .personal-kpis { grid-template-columns: repeat(2, 1fr); }
+  .personal-kpis > div:nth-child(2) { border-right: 0; }
+  .personal-kpis > div:nth-child(-n+2) { border-bottom: 1px solid var(--line); }
+  .personal-investment-card, .personal-forecast-card { padding: 20px 16px; }
+  .personal-allocation-grid { grid-template-columns: 1fr; }
+  .personal-investment-table > div { grid-template-columns: minmax(0, 1fr) auto; gap: 10px; }
+  .personal-investment-table > div > strong:last-child { grid-column: 1 / -1; text-align: left; }
+  .personal-forecast-row { grid-template-columns: 56px minmax(60px, 1fr) 106px; gap: 8px; }
   .life-plan-page { padding-top: 28px; }
   .life-plan-intro { padding-top: 10px; }
   .life-scenario-tabs { grid-template-columns: 1fr; }
@@ -504,6 +597,11 @@ footer button { border: 0; border-bottom: 1px solid var(--muted); background: tr
   .life-kpis { grid-template-columns: 1fr; }
   .life-kpis > div { border-right: 0; border-bottom: 1px solid var(--line); }
   .life-kpis > div:last-child { border-bottom: 0; }
+  .personal-kpis { grid-template-columns: 1fr; }
+  .personal-kpis > div { border-right: 0; border-bottom: 1px solid var(--line); }
+  .personal-kpis > div:last-child { border-bottom: 0; }
+  .personal-form-row, .investment-form-row { grid-template-columns: 1fr 68px; }
+  .personal-form-row .secondary-button { grid-column: 1 / -1; }
 }
 
 @media (prefers-reduced-motion: reduce) {

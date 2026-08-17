@@ -5,6 +5,7 @@ import { jwtVerify, SignJWT } from "jose";
 const scrypt = promisify(scryptCallback);
 
 export const SESSION_COOKIE = "futari_household_session";
+export const ADMIN_SESSION_COOKIE = "futari_personal_session";
 export const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 7;
 const HASH_PREFIX = "scrypt";
 
@@ -58,12 +59,42 @@ export async function verifySessionToken(token: string | undefined) {
   }
 }
 
+export async function createAdminSessionToken() {
+  return new SignJWT({ role: "admin" })
+    .setProtectedHeader({ alg: "HS256", typ: "JWT" })
+    .setSubject("personal-assets")
+    .setIssuedAt()
+    .setExpirationTime(`${SESSION_MAX_AGE_SECONDS}s`)
+    .sign(sessionKey());
+}
+
+export async function verifyAdminSessionToken(token: string | undefined) {
+  if (!token) return false;
+  try {
+    const { payload } = await jwtVerify(token, sessionKey(), { algorithms: ["HS256"] });
+    return payload.sub === "personal-assets" && payload.role === "admin";
+  } catch {
+    return false;
+  }
+}
+
 export function sessionCookieOptions() {
   return {
     name: SESSION_COOKIE,
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax" as const,
+    path: "/",
+    maxAge: SESSION_MAX_AGE_SECONDS,
+  };
+}
+
+export function adminSessionCookieOptions() {
+  return {
+    name: ADMIN_SESSION_COOKIE,
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "strict" as const,
     path: "/",
     maxAge: SESSION_MAX_AGE_SECONDS,
   };

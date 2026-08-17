@@ -21,6 +21,7 @@ Amex明細と家賃・固定費をまとめ、月次精算額、将来支出、�
 - 月次締めによる月単位のGoogle Sheets APIへの保存・読込（`state_YYYY-MM` タブ）
 - 月次履歴で締め済み月の明細・内訳・合計を確認
 - 欲しいものリスト（もの、カテゴリ、金額、URL）とカテゴリ別・全体合計
+- 個人資産エリア（管理者パスワード、給料、口座、投資、月次個人支出、資産予測）
 - 旧localStorageデータの初回移行
 - 複数端末更新時のrevision競合検知
 
@@ -36,6 +37,7 @@ npm run dev
 `.env.example` を `.env.local` にコピーし、次の値を設定します。
 
 - `APP_PASSWORD_HASH`
+- `ADMIN_PASSWORD_HASH`
 - `SESSION_SECRET`
 - `GOOGLE_SHEETS_SPREADSHEET_ID`
 - `GOOGLE_SERVICE_ACCOUNT_EMAIL`
@@ -44,6 +46,8 @@ npm run dev
 Spreadsheetは `GOOGLE_SERVICE_ACCOUNT_EMAIL` のメールアドレスへ編集者として共有してください。サーバーは対応するprivate keyでService Accountとして認証し、月次締め時に対象月の `state_YYYY-MM` シートを自動作成します。旧 `app_state` がある場合は、最初の締め対象月へ下書きとして読み込み、締め時に月次タブへ保存します。
 
 欲しいものリストを初めて読み込むと、同じSpreadsheetに `wishlist` シートが自動作成されます。欲しいものリストは月次状態とは独立して保存されるため、月次締め後も保持されます。
+
+個人資産エリアを初めて開くと、同じSpreadsheetに `personal_assets` シートが自動作成されます。個人資産エリアには `ADMIN_PASSWORD_HASH` による追加認証が必要です。
 
 検証:
 

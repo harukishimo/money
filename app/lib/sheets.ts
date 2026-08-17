@@ -1,11 +1,13 @@
 import { randomUUID } from "node:crypto";
 import { google, type sheets_v4 } from "googleapis";
 import { closingMonthKey, isMonthKey, type HouseholdState } from "./state.ts";
+import { parsePersonalAssetsState, type PersonalAssetsState } from "./personal-assets.ts";
 import { parseWishlistItems, type WishlistItem } from "./wishlist.ts";
 
 const LEGACY_SHEET_NAME = "app_state";
 const MONTHLY_SHEET_PREFIX = "state_";
 const WISHLIST_SHEET_NAME = "wishlist";
+const PERSONAL_ASSETS_SHEET_NAME = "personal_assets";
 const STATE_KEY = "household";
 const WISHLIST_META_KEY = "__meta__";
 const CHUNK_SIZE = 30_000;
@@ -29,6 +31,13 @@ export interface WishlistEnvelope {
   revision: string | null;
   updatedAt: string | null;
   items: WishlistItem[];
+}
+
+export interface PersonalAssetsEnvelope {
+  version: 1;
+  revision: string;
+  updatedAt: string;
+  state: PersonalAssetsState;
 }
 
 let cachedService: sheets_v4.Sheets | null = null;
@@ -192,6 +201,57 @@ export async function readHouseholdHistory(): Promise<StateEnvelope[]> {
   return envelopes
     .filter((envelope): envelope is StateEnvelope => Boolean(envelope?.closedAt && envelope.monthKey))
     .sort((left, right) => (right.monthKey ?? "").localeCompare(left.monthKey ?? ""));
+}
+
+export async function readPersonalAssets(): Promise<PersonalAssetsEnvelope | null> {
+  const service = sheetsService();
+  const id = spreadsheetId();
+  await ensureStateSheet(service, id, PERSONAL_ASSETS_SHEET_NAME);
+  const response = await service.spreadsheets.values.get({
+    spreadsheetId: id,
+    range: `'${PERSONAL_ASSETS_SHEET_NAME}'!A2:E`,
+  });
+  const payload = joinPayloadRows(response.data.values ?? []);
+  if (payload === null) return null;
+  const parsed = JSON.parse(payload) as Partial<PersonalAssetsEnvelope>;
+  const state = parsePersonalAssetsState(parsed.state);
+  if (parsed.version !== 1
+    || typeof parsed.revision !== "string"
+    || typeof parsed.updatedAt !== "string"
+    || !state) {
+    throw new Error("保存された個人資産データの形式が不正です。");
+  }
+  return { version: 1, revision: parsed.revision, updatedAt: parsed.updatedAt, state };
+}
+
+export async function writePersonalAssets(state: PersonalAssetsState, expectedRevision: string | null) {
+  const service = sheetsService();
+  const id = spreadsheetId();
+  await ensureStateSheet(service, id, PERSONAL_ASSETS_SHEET_NAME);
+  const current = await readPersonalAssets();
+  if ((current?.revision ?? null) !== expectedRevision) {
+    throw new SheetsConflictError("The personal assets spreadsheet was updated by another session.");
+  }
+
+  const envelope: PersonalAssetsEnvelope = {
+    version: 1,
+    revision: randomUUID(),
+    updatedAt: new Date().toISOString(),
+    state,
+  };
+  const chunks = splitPayload(JSON.stringify(envelope));
+  const rows = chunks.map((chunk, index) => ["personal", index, chunk, envelope.updatedAt, envelope.revision]);
+  await service.spreadsheets.values.clear({
+    spreadsheetId: id,
+    range: `'${PERSONAL_ASSETS_SHEET_NAME}'!A2:E`,
+  });
+  await service.spreadsheets.values.update({
+    spreadsheetId: id,
+    range: `'${PERSONAL_ASSETS_SHEET_NAME}'!A2:E${rows.length + 1}`,
+    valueInputOption: "RAW",
+    requestBody: { values: rows },
+  });
+  return envelope;
 }
 
 export async function readWishlist(): Promise<WishlistEnvelope> {

@@ -2,7 +2,7 @@
 
 | 項目 | 内容 |
 |---|---|
-| 文書版 | 1.3 |
+| 文書版 | 1.4 |
 | 作成日 | 2026-08-15 |
 | 対象 | Next.js / Vercel / Google Sheets API構成 |
 | 参照 | `requirements-definition.md` |
@@ -57,6 +57,7 @@ flowchart LR
 | Sheets Repository | `state_YYYY-MM`シートの初期化、分割JSONの読込・更新、revision競合検知 |
 | Google Spreadsheet | 1世帯分の月別アプリ状態を永続化し、Google標準の変更履歴を保持 |
 | Wishlist Repository | 欲しいものを `wishlist` シートへ保存し、revisionで同時更新を検知 |
+| Personal Assets Repository | 個人資産を `personal_assets` シートへ保存し、revisionで同時更新を検知 |
 
 ## 4. ディレクトリ構成
 
@@ -68,6 +69,8 @@ app/
     state/route.ts
     history/route.ts
     wishlist/route.ts
+    admin/auth/route.ts
+    admin/assets/route.ts
   login/
     page.tsx
     login-form.tsx
@@ -76,6 +79,7 @@ app/
     finance.ts
     life-plan.ts
     wishlist.ts
+    personal-assets.ts
     login-rate-limit.ts
     sheets.ts
     state.ts
@@ -121,6 +125,10 @@ docs/
 | GET | `/api/history` | 締め済みの月別履歴を取得 |
 | GET | `/api/wishlist` | 欲しいものリストとrevisionを取得 |
 | PUT | `/api/wishlist` | 欲しいものリストをrevision照合後に保存 |
+| POST | `/api/admin/auth` | 個人資産用パスワードを照合し、管理者セッションCookieを発行 |
+| DELETE | `/api/admin/auth` | 管理者セッションCookieを削除 |
+| GET | `/api/admin/assets` | 管理者セッション検証後に個人資産を取得 |
+| PUT | `/api/admin/assets` | 管理者セッションとrevisionを検証して個人資産を保存 |
 
 ### 6.1 入力検証
 
@@ -151,6 +159,7 @@ docs/
 | 変数 | 秘密 | 用途 |
 |---|---|---|
 | `APP_PASSWORD_HASH` | はい | `npm run auth:hash` で生成するscryptハッシュ |
+| `ADMIN_PASSWORD_HASH` | はい | 個人資産エリア専用。`npm run auth:hash` で生成するscryptハッシュ |
 | `SESSION_SECRET` | はい | `npm run auth:secret` で生成するJWT署名鍵。32文字以上 |
 | `GOOGLE_SHEETS_SPREADSHEET_ID` | 準秘密 | 対象Spreadsheet ID |
 | `GOOGLE_SERVICE_ACCOUNT_EMAIL` | 準秘密 | Service Account JSONの `client_email`。Spreadsheetの共有先 |
@@ -169,6 +178,8 @@ ProductionとPreviewで値を分離する。Previewでは本番Spreadsheetを使
 - 書込失敗時はUIの編集内容を保持し、再送可能にする。
 - `wishlist` シートはA〜G列にID、名称、カテゴリ、金額、URL、更新日時、revisionを保存する。
 - 欲しいものリストの更新もrevisionを比較し、別端末の更新を上書きしない。
+- `personal_assets` シートは月次状態と同じ分割JSON形式で、給料、予備資金、口座、投資、個人支出を保存する。
+- 個人資産APIは共有セッションに加えて管理者セッションCookieを検証し、CookieはHttpOnly・SameSite=Strictとする。
 
 ## 10. Excel解析要件
 

@@ -1,0 +1,232 @@
+"use client";
+
+import { useMemo, useState } from "react";
+import { formatYen } from "./lib/finance";
+import {
+  calculatePersonalFinance,
+  type PersonalAssetsState,
+  type PersonalMonthSummary,
+} from "./lib/personal-assets";
+import { formatMonthLabel, isMonthKey } from "./lib/state";
+
+interface PersonalAssetsPanelProps {
+  state: PersonalAssetsState;
+  monthSummaries: PersonalMonthSummary[];
+  selectedMonth: string;
+  onMonthChange: (monthKey: string) => void;
+  onChange: (state: PersonalAssetsState) => void;
+  onLogout: () => void;
+}
+
+function makeId(prefix: string) {
+  if (typeof crypto !== "undefined" && "randomUUID" in crypto) return `${prefix}-${crypto.randomUUID()}`;
+  return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+function moneyValue(value: string) {
+  const amount = Number(value.replaceAll(",", ""));
+  return Number.isFinite(amount) && amount >= 0 ? amount : null;
+}
+
+export default function PersonalAssetsPanel({
+  state,
+  monthSummaries,
+  selectedMonth,
+  onMonthChange,
+  onChange,
+  onLogout,
+}: PersonalAssetsPanelProps) {
+  const [accountForm, setAccountForm] = useState({ name: "", balance: "" });
+  const [investmentForm, setInvestmentForm] = useState({ name: "", amount: "", returnRate: "0" });
+  const [expenseForm, setExpenseForm] = useState({ monthKey: selectedMonth, label: "", amount: "" });
+  const monthOptions = useMemo(
+    () => [...new Set([selectedMonth, ...monthSummaries.map((summary) => summary.monthKey), ...state.personalExpenses.map((expense) => expense.monthKey)])].sort().reverse(),
+    [monthSummaries, selectedMonth, state.personalExpenses],
+  );
+  const selectedSummary = monthSummaries.find((summary) => summary.monthKey === selectedMonth) ?? {
+    monthKey: selectedMonth,
+    claimAmount: 0,
+    amexAmount: 0,
+    otherAmount: 0,
+  };
+  const result = calculatePersonalFinance(state, selectedSummary);
+  const maxProjection = Math.max(...result.monthlyProjection.map((row) => Math.abs(row.estimatedAssets)), 1);
+
+  const addAccount = () => {
+    const balance = moneyValue(accountForm.balance);
+    if (!accountForm.name.trim() || balance === null) return;
+    onChange({
+      ...state,
+      accounts: [...state.accounts, { id: makeId("account"), name: accountForm.name.trim(), balance }],
+    });
+    setAccountForm({ name: "", balance: "" });
+  };
+
+  const addInvestment = () => {
+    const amount = moneyValue(investmentForm.amount);
+    const returnRate = Number(investmentForm.returnRate);
+    if (!investmentForm.name.trim() || amount === null || !Number.isFinite(returnRate) || returnRate < -100 || returnRate > 1000) return;
+    onChange({
+      ...state,
+      investments: [...state.investments, {
+        id: makeId("investment"),
+        name: investmentForm.name.trim(),
+        amount,
+        returnRate,
+      }],
+    });
+    setInvestmentForm({ name: "", amount: "", returnRate: "0" });
+  };
+
+  const addExpense = () => {
+    const amount = moneyValue(expenseForm.amount);
+    if (!isMonthKey(expenseForm.monthKey) || !expenseForm.label.trim() || amount === null) return;
+    onChange({
+      ...state,
+      personalExpenses: [...state.personalExpenses, {
+        id: makeId("personal-expense"),
+        monthKey: expenseForm.monthKey,
+        label: expenseForm.label.trim(),
+        amount,
+      }],
+    });
+    setExpenseForm({ monthKey: expenseForm.monthKey, label: "", amount: "" });
+  };
+
+  return (
+    <section className="personal-assets-page" aria-labelledby="personal-assets-title">
+      <div className="simulation-intro personal-assets-intro">
+        <div>
+          <p className="eyebrow">PRIVATE ASSETS / CASH FLOW</p>
+          <h1 id="personal-assets-title">自分のお金が、<br />どう増えるか。</h1>
+        </div>
+        <div className="personal-assets-intro-actions">
+          <p>共有家計とは分離した個人用の資産管理です。選択月の請求額と登録済み費用から、残るお金と将来の資産推移を試算します。</p>
+          <button className="secondary-button" onClick={onLogout}>個人資産をロック</button>
+        </div>
+      </div>
+
+      <div className="personal-month-toolbar">
+        <label>収支を確認する月<select value={selectedMonth} onChange={(event) => { onMonthChange(event.target.value); setExpenseForm((current) => ({ ...current, monthKey: event.target.value })); }}>
+          {monthOptions.map((monthKey) => <option key={monthKey} value={monthKey}>{formatMonthLabel(monthKey)}</option>)}
+        </select></label>
+        <span>請求額・Amex・共有費用は月次データから自動取得</span>
+      </div>
+
+      <div className="personal-assets-layout">
+        <aside className="personal-input-panel">
+          <div className="section-heading compact"><div><p className="section-number">01</p><h2>個人資産を入力</h2></div></div>
+          <div className="personal-base-form">
+            <label>自分の月給<div className="input-with-suffix"><input type="number" min="0" value={state.monthlySalary} onChange={(event) => onChange({ ...state, monthlySalary: Math.max(0, Number(event.target.value) || 0) })} /><span>円</span></div></label>
+            <label>残す予備資金<div className="input-with-suffix"><input type="number" min="0" value={state.reserveTarget} onChange={(event) => onChange({ ...state, reserveTarget: Math.max(0, Number(event.target.value) || 0) })} /><span>円</span></div></label>
+          </div>
+
+          <details open>
+            <summary>口座残高</summary>
+            <div className="personal-form-row">
+              <input value={accountForm.name} placeholder="口座名" onChange={(event) => setAccountForm({ ...accountForm, name: event.target.value })} />
+              <input inputMode="numeric" value={accountForm.balance} placeholder="残高" onChange={(event) => setAccountForm({ ...accountForm, balance: event.target.value })} />
+              <button className="secondary-button" onClick={addAccount}>追加</button>
+            </div>
+            <div className="personal-entry-list">
+              {state.accounts.map((account) => (
+                <div key={account.id}><span>{account.name}</span><strong>{formatYen(account.balance)}</strong><button aria-label={`${account.name}を削除`} onClick={() => onChange({ ...state, accounts: state.accounts.filter((item) => item.id !== account.id) })}>×</button></div>
+              ))}
+              {state.accounts.length === 0 && <p className="empty-note">口座残高を登録してください。</p>}
+            </div>
+          </details>
+
+          <details open>
+            <summary>投資状況</summary>
+            <div className="personal-form-stack">
+              <input value={investmentForm.name} placeholder="銘柄名・投資先" onChange={(event) => setInvestmentForm({ ...investmentForm, name: event.target.value })} />
+              <div className="personal-form-row investment-form-row">
+                <input inputMode="numeric" value={investmentForm.amount} placeholder="投資額" onChange={(event) => setInvestmentForm({ ...investmentForm, amount: event.target.value })} />
+                <div className="input-with-suffix"><input type="number" step="0.1" value={investmentForm.returnRate} onChange={(event) => setInvestmentForm({ ...investmentForm, returnRate: event.target.value })} /><span>%</span></div>
+                <button className="secondary-button" onClick={addInvestment}>追加</button>
+              </div>
+            </div>
+            <div className="personal-entry-list">
+              {state.investments.map((investment) => (
+                <div key={investment.id}><span>{investment.name}<small>利益率 {investment.returnRate}%</small></span><strong>{formatYen(investment.amount)}</strong><button aria-label={`${investment.name}を削除`} onClick={() => onChange({ ...state, investments: state.investments.filter((item) => item.id !== investment.id) })}>×</button></div>
+              ))}
+              {state.investments.length === 0 && <p className="empty-note">投資額と利益率を登録してください。</p>}
+            </div>
+          </details>
+
+          <details open>
+            <summary>個人支出（月を選んで登録）</summary>
+            <div className="personal-form-stack">
+              <label className="personal-small-label">利用月<input type="month" value={expenseForm.monthKey} onChange={(event) => setExpenseForm({ ...expenseForm, monthKey: event.target.value })} /></label>
+              <input value={expenseForm.label} placeholder="例：趣味、個人旅行" onChange={(event) => setExpenseForm({ ...expenseForm, label: event.target.value })} />
+              <div className="personal-form-row">
+                <input inputMode="numeric" value={expenseForm.amount} placeholder="金額" onChange={(event) => setExpenseForm({ ...expenseForm, amount: event.target.value })} />
+                <button className="secondary-button" onClick={addExpense}>追加</button>
+              </div>
+            </div>
+            <div className="personal-entry-list">
+              {state.personalExpenses.map((expense) => (
+                <div key={expense.id}><span>{formatMonthLabel(expense.monthKey)}・{expense.label}</span><strong>{formatYen(expense.amount)}</strong><button aria-label={`${expense.label}を削除`} onClick={() => onChange({ ...state, personalExpenses: state.personalExpenses.filter((item) => item.id !== expense.id) })}>×</button></div>
+              ))}
+              {state.personalExpenses.length === 0 && <p className="empty-note">月次締め後でも個人分だけ追加できます。</p>}
+            </div>
+          </details>
+        </aside>
+
+        <div className="personal-results">
+          <div className="personal-formula-card">
+            <p className="section-number">02 / MONTHLY CASH FLOW</p>
+            <h2>今月、残るお金</h2>
+            <strong className={result.remainingMoney < 0 ? "personal-negative" : ""}>{formatYen(result.remainingMoney)}</strong>
+            <p>（自分の給料 {formatYen(result.salary)} ＋ 請求額 {formatYen(result.claimAmount)}）− Amex {formatYen(result.amexAmount)} − その他 {formatYen(result.otherAmount)}</p>
+            <div className="personal-cashflow-breakdown">
+              <div><span>共有費用</span><strong>{formatYen(result.sharedOtherAmount)}</strong></div>
+              <div><span>個人支出</span><strong>{formatYen(result.personalExpenseAmount)}</strong></div>
+              <div><span>対象月</span><strong>{formatMonthLabel(selectedMonth)}</strong></div>
+            </div>
+          </div>
+
+          <div className="personal-kpis">
+            <div><span>口座残高合計</span><strong>{formatYen(result.accountTotal)}</strong></div>
+            <div><span>投資元本合計</span><strong>{formatYen(result.investmentPrincipal)}</strong></div>
+            <div><span>現時点の総資産</span><strong>{formatYen(result.totalAssets)}</strong><small>口座＋投資元本＋残るお金</small></div>
+            <div><span>投資に使える金額</span><strong>{formatYen(result.investableAmount)}</strong><small>予備資金 {formatYen(result.reserveTarget)}を確保後</small></div>
+          </div>
+
+          <div className="personal-investment-card">
+            <div className="section-heading compact"><div><p className="section-number">03</p><h2>投資に使える金額の配分</h2></div><span>インカム：キャピタル = 8：2</span></div>
+            <div className="personal-allocation-grid">
+              <div><span>インカムゲイン側</span><strong>{formatYen(result.incomeGainBudget)}</strong><small>80%</small></div>
+              <div><span>キャピタルゲイン側</span><strong>{formatYen(result.capitalGainBudget)}</strong><small>20%</small></div>
+            </div>
+            <p className="detail-note">投資に使える金額は、総資産から設定した予備資金を引いた金額です。配分は試算上の目安で、実際の購入判断や投資助言ではありません。</p>
+          </div>
+
+          <div className="personal-investment-card">
+            <div className="section-heading compact"><div><p className="section-number">04</p><h2>投資の現在状態</h2></div><span>評価損益目安 {formatYen(result.investmentGain)}</span></div>
+            {state.investments.length === 0 ? <p className="empty-note">投資を登録すると、元本・利益率・評価額を表示します。</p> : (
+              <div className="personal-investment-table">
+                {state.investments.map((investment) => {
+                  const estimated = Math.round(investment.amount * (1 + investment.returnRate / 100));
+                  return <div key={investment.id}><span>{investment.name}<small>利益率 {investment.returnRate}%</small></span><strong>{formatYen(investment.amount)}</strong><strong>{formatYen(estimated)}<small>評価額目安</small></strong></div>;
+                })}
+              </div>
+            )}
+            <p className="detail-note">総資産はご指定どおり投資元本で計算し、利益率は評価額目安として別表示しています。</p>
+          </div>
+
+          <div className="personal-forecast-card">
+            <div className="section-heading compact"><div><p className="section-number">05</p><h2>今後12か月の貯まり具合</h2></div><span>選択月の残額が続く前提</span></div>
+            <div className="personal-forecast-list">
+              {result.monthlyProjection.map((row) => (
+                <div className={row.estimatedAssets < 0 ? "personal-forecast-row negative" : "personal-forecast-row"} key={row.monthKey}>
+                  <span>{row.label}</span><div><i style={{ width: `${Math.max(3, Math.min(100, Math.abs(row.estimatedAssets) / maxProjection * 100))}%` }} /></div><strong>{formatYen(row.estimatedAssets)}</strong>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
