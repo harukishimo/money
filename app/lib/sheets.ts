@@ -4,8 +4,10 @@ import { closingMonthKey, isMonthKey, type HouseholdState } from "./state.ts";
 import {
   parsePersonalAssetsState,
   parsePersonalCalculationSnapshot,
+  parsePersonalInvestments,
   parsePersonalReserveTarget,
   type PersonalAssetsState,
+  type PersonalInvestment,
   type PersonalCalculationSnapshot,
 } from "./personal-assets.ts";
 import { parseWishlistItems, type WishlistItem } from "./wishlist.ts";
@@ -56,6 +58,7 @@ export interface PersonalSettingsEnvelope {
   revision: string;
   updatedAt: string;
   reserveTarget: number;
+  investments?: PersonalInvestment[];
 }
 
 let cachedService: sheets_v4.Sheets | null = null;
@@ -289,17 +292,21 @@ async function readPersonalSettingsFromSheet(service: sheets_v4.Sheets, id: stri
   if (payload === null) return null;
   const parsed = JSON.parse(payload) as Partial<PersonalSettingsEnvelope>;
   const reserveTarget = parsePersonalReserveTarget(parsed.reserveTarget);
+  const investments = parsed.investments === undefined ? undefined : parsePersonalInvestments(parsed.investments);
   if (parsed.version !== 1
     || typeof parsed.revision !== "string"
     || typeof parsed.updatedAt !== "string"
-    || reserveTarget === null) {
+    || reserveTarget === null
+    || (parsed.investments !== undefined && investments === null)) {
     throw new Error("保存された個人資産設定の形式が不正です。");
   }
+  if (investments === null) throw new Error("保存された個人資産設定の形式が不正です。");
   return {
     version: 1 as const,
     revision: parsed.revision,
     updatedAt: parsed.updatedAt,
     reserveTarget,
+    ...(investments === undefined ? {} : { investments }),
   };
 }
 
@@ -358,6 +365,7 @@ export async function writePersonalAssets(
     revision: randomUUID(),
     updatedAt: envelope.updatedAt,
     reserveTarget: state.reserveTarget,
+    investments: state.investments,
   };
   const chunks = splitPayload(JSON.stringify(envelope));
   const rows = chunks.map((chunk, index) => ["personal", index, chunk, envelope.updatedAt, envelope.revision]);

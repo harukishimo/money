@@ -41,7 +41,7 @@ export default function PersonalAssetsPanel({
   monthLoading,
 }: PersonalAssetsPanelProps) {
   const [accountForm, setAccountForm] = useState({ name: "", balance: "" });
-  const [investmentForm, setInvestmentForm] = useState({ name: "", amount: "", returnRate: "0" });
+  const [investmentForm, setInvestmentForm] = useState({ name: "", amount: "", valuation: "", profitLossRate: "0" });
   const [expenseForm, setExpenseForm] = useState({ monthKey: selectedMonth, label: "", amount: "" });
   const monthOptions = useMemo(
     () => [...new Set([selectedMonth, ...savedMonthKeys, ...monthSummaries.map((summary) => summary.monthKey), ...state.personalExpenses.map((expense) => expense.monthKey)])].sort().reverse(),
@@ -79,18 +79,20 @@ export default function PersonalAssetsPanel({
 
   const addInvestment = () => {
     const amount = moneyValue(investmentForm.amount);
-    const returnRate = Number(investmentForm.returnRate);
-    if (!investmentForm.name.trim() || amount === null || !Number.isFinite(returnRate) || returnRate < -100 || returnRate > 1000) return;
+    const valuation = moneyValue(investmentForm.valuation);
+    const profitLossRate = Number(investmentForm.profitLossRate);
+    if (!investmentForm.name.trim() || amount === null || valuation === null || !Number.isFinite(profitLossRate) || profitLossRate < -100 || profitLossRate > 1000) return;
     onChange({
       ...state,
       investments: [...state.investments, {
         id: makeId("investment"),
         name: investmentForm.name.trim(),
         amount,
-        returnRate,
+        valuation,
+        profitLossRate,
       }],
     });
-    setInvestmentForm({ name: "", amount: "", returnRate: "0" });
+    setInvestmentForm({ name: "", amount: "", valuation: "", profitLossRate: "0" });
   };
 
   const addExpense = () => {
@@ -125,7 +127,7 @@ export default function PersonalAssetsPanel({
         <label>収支を確認する月<select value={selectedMonth} onChange={(event) => { onMonthChange(event.target.value); setExpenseForm((current) => ({ ...current, monthKey: event.target.value })); }}>
           {monthOptions.map((monthKey) => <option key={monthKey} value={monthKey}>{formatMonthLabel(monthKey)}</option>)}
         </select></label>
-        <span>請求額・Amex・共有費用は月次データから取得。入力内容と計算結果は対象月へ自動保存</span>
+        <span>請求額・Amex・共有費用は月次データから取得。給与・口座・個人支出は月別、予備資金・投資状況は月を跨いで保存</span>
       </div>
 
       <div className={`personal-assets-layout${monthLoading ? " is-loading" : ""}`}>
@@ -167,20 +169,21 @@ export default function PersonalAssetsPanel({
           </details>
 
           <details open>
-            <summary>投資状況</summary>
+            <summary>投資状況（全月共通）</summary>
             <div className="personal-form-stack">
               <input value={investmentForm.name} placeholder="銘柄名・投資先" onChange={(event) => setInvestmentForm({ ...investmentForm, name: event.target.value })} />
               <div className="personal-form-row investment-form-row">
-                <input inputMode="numeric" value={investmentForm.amount} placeholder="投資額" onChange={(event) => setInvestmentForm({ ...investmentForm, amount: event.target.value })} />
-                <div className="input-with-suffix"><input type="number" step="0.1" value={investmentForm.returnRate} onChange={(event) => setInvestmentForm({ ...investmentForm, returnRate: event.target.value })} /><span>%</span></div>
+                <input inputMode="numeric" value={investmentForm.amount} placeholder="投資元本" onChange={(event) => setInvestmentForm({ ...investmentForm, amount: event.target.value })} />
+                <input inputMode="numeric" value={investmentForm.valuation} placeholder="評価額" onChange={(event) => setInvestmentForm({ ...investmentForm, valuation: event.target.value })} />
+                <div className="input-with-suffix"><input type="number" step="0.1" value={investmentForm.profitLossRate} placeholder="評価損益率" onChange={(event) => setInvestmentForm({ ...investmentForm, profitLossRate: event.target.value })} /><span>%</span></div>
                 <button className="secondary-button" onClick={addInvestment}>追加</button>
               </div>
             </div>
-            <div className="personal-entry-list">
+            <div className="personal-entry-list personal-investment-entry-list">
               {state.investments.map((investment) => (
-                <div key={investment.id}><span>{investment.name}<small>利益率 {investment.returnRate}%</small></span><strong>{formatYen(investment.amount)}</strong><button aria-label={`${investment.name}を削除`} onClick={() => onChange({ ...state, investments: state.investments.filter((item) => item.id !== investment.id) })}>×</button></div>
+                <div key={investment.id}><span>{investment.name}<small>評価損益率 {investment.profitLossRate}%</small></span><strong>{formatYen(investment.amount)}<small>元本</small></strong><strong>{formatYen(investment.valuation)}<small>評価額</small></strong><button aria-label={`${investment.name}を削除`} onClick={() => onChange({ ...state, investments: state.investments.filter((item) => item.id !== investment.id) })}>×</button></div>
               ))}
-              {state.investments.length === 0 && <p className="empty-note">投資額と利益率を登録してください。</p>}
+              {state.investments.length === 0 && <p className="empty-note">投資元本・評価額・評価損益率を登録してください。</p>}
             </div>
           </details>
 
@@ -236,15 +239,14 @@ export default function PersonalAssetsPanel({
 
           <div className="personal-investment-card">
             <div className="section-heading compact"><div><p className="section-number">04</p><h2>投資の現在状態</h2></div><span>評価損益目安 {formatYen(result.investmentGain)}</span></div>
-            {state.investments.length === 0 ? <p className="empty-note">投資を登録すると、元本・利益率・評価額を表示します。</p> : (
+            {state.investments.length === 0 ? <p className="empty-note">投資を登録すると、元本・評価額・評価損益率を表示します。</p> : (
               <div className="personal-investment-table">
                 {state.investments.map((investment) => {
-                  const estimated = Math.round(investment.amount * (1 + investment.returnRate / 100));
-                  return <div key={investment.id}><span>{investment.name}<small>利益率 {investment.returnRate}%</small></span><strong>{formatYen(investment.amount)}</strong><strong>{formatYen(estimated)}<small>評価額目安</small></strong></div>;
+                  return <div key={investment.id}><span>{investment.name}<small>評価損益率 {investment.profitLossRate}%</small></span><strong>{formatYen(investment.amount)}<small>投資元本</small></strong><strong>{formatYen(investment.valuation)}<small>評価額</small></strong></div>;
                 })}
               </div>
             )}
-            <p className="detail-note">総資産はご指定どおり投資元本で計算し、利益率は評価額目安として別表示しています。</p>
+            <p className="detail-note">総資産と投資可能額は従来どおり投資元本で計算し、評価額・評価損益率は現在の投資状態として表示します。</p>
           </div>
 
           <div className="personal-forecast-card">

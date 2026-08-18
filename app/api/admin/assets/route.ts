@@ -58,17 +58,22 @@ export async function GET(request: NextRequest) {
     const months = await readPersonalAssetMonthKeys();
     const baseState = envelope?.state ?? createDefaultPersonalAssetsState();
     let reserveTarget = settings?.reserveTarget ?? envelope?.state.reserveTarget;
-    if (reserveTarget === undefined) {
+    let investments = settings?.investments ?? envelope?.state.investments;
+    if (reserveTarget === undefined || investments === undefined) {
       for (const candidateMonth of months) {
         const candidate = await readPersonalAssets(candidateMonth);
-        if (candidate) {
-          reserveTarget = candidate.state.reserveTarget;
-          break;
-        }
+        if (!candidate) continue;
+        if (reserveTarget === undefined) reserveTarget = candidate.state.reserveTarget;
+        if (investments === undefined) investments = candidate.state.investments;
+        if (reserveTarget !== undefined && investments !== undefined) break;
       }
     }
     return json({
-      state: { ...baseState, reserveTarget: reserveTarget ?? baseState.reserveTarget },
+      state: {
+        ...baseState,
+        reserveTarget: reserveTarget ?? baseState.reserveTarget,
+        investments: investments ?? baseState.investments,
+      },
       revision: monthlyEnvelope?.revision ?? null,
       settingsRevision: settings?.revision ?? null,
       updatedAt: envelope?.updatedAt ?? null,

@@ -11,7 +11,7 @@ const state = {
   reserveTarget: 100000,
   accounts: [{ id: "bank", name: "生活口座", balance: 500000 }],
   mainAccountId: "bank",
-  investments: [{ id: "fund", name: "投資信託", amount: 100000, returnRate: 10 }],
+  investments: [{ id: "fund", name: "投資信託", amount: 100000, valuation: 110000, profitLossRate: 10 }],
   personalExpenses: [{ id: "hobby", monthKey: "2026-07", label: "趣味", amount: 20000 }],
 };
 
@@ -40,10 +40,24 @@ test("personal assets calculate remaining money and total assets", () => {
 
 test("personal asset state rejects invalid private data", () => {
   assert.equal(parsePersonalAssetsState({ ...state, personalExpenses: [{ ...state.personalExpenses[0], monthKey: "2026-13" }] }), null);
-  assert.equal(parsePersonalAssetsState({ ...state, investments: [{ ...state.investments[0], returnRate: -101 }] }), null);
+  assert.equal(parsePersonalAssetsState({ ...state, investments: [{ ...state.investments[0], profitLossRate: -101 }] }), null);
   assert.equal(parsePersonalAssetsState({ ...state, accounts: [{ ...state.accounts[0], balance: -1 }] }), null);
   assert.equal(parsePersonalAssetsState({ ...state, mainAccountId: "missing" }), null);
   assert.equal(parsePersonalAssetsState({ ...state, mainAccountId: undefined })?.mainAccountId, null);
+});
+
+test("legacy investment return rate is migrated to valuation and profit-loss rate", () => {
+  const parsed = parsePersonalAssetsState({
+    ...state,
+    investments: [{ id: "fund", name: "投資信託", amount: 100000, returnRate: 10 }],
+  });
+  assert.deepEqual(parsed?.investments[0], {
+    id: "fund",
+    name: "投資信託",
+    amount: 100000,
+    valuation: 110000,
+    profitLossRate: 10,
+  });
 });
 
 test("personal calculation snapshot is validated by month", () => {

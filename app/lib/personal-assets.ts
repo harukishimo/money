@@ -10,7 +10,8 @@ export interface PersonalInvestment {
   id: string;
   name: string;
   amount: number;
-  returnRate: number;
+  valuation: number;
+  profitLossRate: number;
 }
 
 export interface PersonalExpense {
@@ -101,17 +102,48 @@ function isAccount(value: unknown): value is PersonalAccount {
     && isNonNegativeNumber(value.balance);
 }
 
-function isInvestment(value: unknown): value is PersonalInvestment {
-  return isRecord(value)
-    && typeof value.id === "string"
-    && value.id.length > 0
-    && value.id.length <= 120
-    && isText(value.name, 1, 120)
-    && isNonNegativeNumber(value.amount)
-    && typeof value.returnRate === "number"
-    && Number.isFinite(value.returnRate)
-    && value.returnRate >= -100
-    && value.returnRate <= 1000;
+function parsePersonalInvestment(value: unknown): PersonalInvestment | null {
+  if (!isRecord(value)
+    || typeof value.id !== "string"
+    || value.id.length === 0
+    || value.id.length > 120
+    || typeof value.name !== "string"
+    || !isText(value.name, 1, 120)
+    || !isNonNegativeNumber(value.amount)) {
+    return null;
+  }
+  const legacyRate = typeof value.returnRate === "number" && Number.isFinite(value.returnRate)
+    ? value.returnRate
+    : null;
+  const profitLossRate = typeof value.profitLossRate === "number" && Number.isFinite(value.profitLossRate)
+    ? value.profitLossRate
+    : legacyRate;
+  const valuation = isNonNegativeNumber(value.valuation)
+    ? value.valuation
+    : legacyRate === null
+      ? null
+      : Math.round(value.amount * (1 + legacyRate / 100));
+  if (profitLossRate === null
+    || profitLossRate < -100
+    || profitLossRate > 1000
+    || valuation === null) {
+    return null;
+  }
+  return {
+    id: value.id,
+    name: value.name.trim(),
+    amount: value.amount,
+    valuation,
+    profitLossRate,
+  };
+}
+
+export function parsePersonalInvestments(value: unknown): PersonalInvestment[] | null {
+  if (!Array.isArray(value) || value.length > 100) return null;
+  const investments = value.map(parsePersonalInvestment);
+  return investments.every((investment): investment is PersonalInvestment => investment !== null)
+    ? investments
+    : null;
 }
 
 function isPersonalExpense(value: unknown): value is PersonalExpense {
@@ -153,15 +185,14 @@ export function createDefaultPersonalAssetsState(): PersonalAssetsState {
 
 export function parsePersonalAssetsState(value: unknown): PersonalAssetsState | null {
   const reserveTarget = isRecord(value) ? parsePersonalReserveTarget(value.reserveTarget) : null;
+  const investments = isRecord(value) ? parsePersonalInvestments(value.investments) : null;
   if (!isRecord(value)
     || !isNonNegativeNumber(value.monthlySalary)
     || reserveTarget === null
     || !Array.isArray(value.accounts)
     || value.accounts.length > 100
     || !value.accounts.every(isAccount)
-    || !Array.isArray(value.investments)
-    || value.investments.length > 100
-    || !value.investments.every(isInvestment)
+    || investments === null
     || !Array.isArray(value.personalExpenses)
     || value.personalExpenses.length > 500
     || !value.personalExpenses.every(isPersonalExpense)) {
@@ -177,7 +208,7 @@ export function parsePersonalAssetsState(value: unknown): PersonalAssetsState | 
     reserveTarget,
     accounts: value.accounts.map((account) => ({ ...account, name: account.name.trim() })),
     mainAccountId,
-    investments: value.investments.map((investment) => ({ ...investment, name: investment.name.trim() })),
+    investments,
     personalExpenses: value.personalExpenses.map((expense) => ({ ...expense, label: expense.label.trim() })),
   };
 }
@@ -201,10 +232,7 @@ export function calculatePersonalFinance(
     ? mainAccountBaseBalance + state.monthlySalary + month.claimAmount - month.amexStatementAmount - otherAmount
     : monthlyCashflow;
   const investmentPrincipal = state.investments.reduce((sum, investment) => sum + investment.amount, 0);
-  const investmentEstimatedValue = state.investments.reduce(
-    (sum, investment) => sum + Math.round(investment.amount * (1 + investment.returnRate / 100)),
-    0,
-  );
+  const investmentEstimatedValue = state.investments.reduce((sum, investment) => sum + investment.valuation, 0);
   const investmentGain = investmentEstimatedValue - investmentPrincipal;
   const accountTotalExcludingMain = mainAccount ? accountTotal - mainAccountBalance : accountTotal;
   const totalAssets = accountTotalExcludingMain + investmentPrincipal + remainingMoney;
