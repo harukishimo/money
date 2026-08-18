@@ -238,7 +238,7 @@ export function calculatePersonalFinance(
     return {
       monthKey,
       label: formatMonthLabel(monthKey),
-      estimatedAssets: totalAssets + monthlyCashflow * monthNumber,
+      estimatedAssets: totalAssets + remainingMoney * monthNumber,
     };
   });
 

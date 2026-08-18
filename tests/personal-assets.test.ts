@@ -34,7 +34,8 @@ test("personal assets calculate remaining money and total assets", () => {
   assert.equal(result.investableAmount, 91290);
   assert.equal(result.incomeGainBudget, 73032);
   assert.equal(result.capitalGainBudget, 18258);
-  assert.equal(result.monthlyProjection[0].estimatedAssets, 342580);
+  assert.equal(result.monthlyProjection[0].estimatedAssets, 492580);
+  assert.equal(result.monthlyProjection[1].estimatedAssets, 683870);
 });
 
 test("personal asset state rejects invalid private data", () => {
