@@ -18,7 +18,12 @@ import {
 import type { HistoryEntry } from "./lib/history";
 import { createDefaultLifePlanInputs, type LifePlanInputs } from "./lib/life-plan";
 import { isWishlistUrl, summarizeWishlist, type WishlistItem, type WishlistSummary } from "./lib/wishlist";
-import { type PersonalAssetsState, type PersonalMonthSummary } from "./lib/personal-assets";
+import {
+  calculatePersonalFinance,
+  type PersonalAssetsState,
+  type PersonalCalculationSnapshot,
+  type PersonalMonthSummary,
+} from "./lib/personal-assets";
 import {
   closingMonthKey,
   formatMonthLabel,
@@ -174,9 +179,17 @@ async function adminResponseJson<T>(response: Response): Promise<T> {
   return body;
 }
 
-async function loadRemotePersonalAssets() {
-  const response = await fetch("/api/admin/assets", { cache: "no-store" });
-  return adminResponseJson<{ state: PersonalAssetsState; revision: string | null; updatedAt: string | null }>(response);
+async function loadRemotePersonalAssets(monthKey: string) {
+  const response = await fetch(`/api/admin/assets?month=${encodeURIComponent(monthKey)}`, { cache: "no-store" });
+  return adminResponseJson<{
+    state: PersonalAssetsState;
+    revision: string | null;
+    updatedAt: string | null;
+    calculation: PersonalCalculationSnapshot | null;
+    monthKey: string;
+    source: "month" | "legacy" | "empty";
+    months: string[];
+  }>(response);
 }
 
 async function loginPersonalAssets(password: string) {
@@ -188,13 +201,22 @@ async function loginPersonalAssets(password: string) {
   return adminResponseJson<{ authenticated: true }>(response);
 }
 
-async function saveRemotePersonalAssets(state: PersonalAssetsState, expectedRevision: string | null) {
-  const response = await fetch("/api/admin/assets", {
+async function saveRemotePersonalAssets(
+  state: PersonalAssetsState,
+  monthKey: string,
+  expectedRevision: string | null,
+  calculation: PersonalCalculationSnapshot,
+) {
+  const response = await fetch(`/api/admin/assets?month=${encodeURIComponent(monthKey)}`, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ state, expectedRevision }),
+    body: JSON.stringify({ state, expectedRevision, calculation }),
   });
-  return adminResponseJson<{ state: PersonalAssetsState; revision: string; updatedAt: string }>(response);
+  return adminResponseJson<{ state: PersonalAssetsState; revision: string; updatedAt: string; monthKey: string; calculation: PersonalCalculationSnapshot }>(response);
+}
+
+function personalSaveSignature(state: PersonalAssetsState, calculation: PersonalCalculationSnapshot | null) {
+  return JSON.stringify({ state, calculation });
 }
 
 export default function Home() {
@@ -213,6 +235,8 @@ export default function Home() {
   const [wishlist, setWishlist] = useState<WishlistItem[]>([]);
   const [personalAssets, setPersonalAssets] = useState<PersonalAssetsState | null>(null);
   const [selectedPersonalMonth, setSelectedPersonalMonth] = useState<string | null>(null);
+  const [personalAssetMonths, setPersonalAssetMonths] = useState<string[]>([]);
+  const [personalLoadedMonthKey, setPersonalLoadedMonthKey] = useState<string | null>(null);
   const [personalUnlocked, setPersonalUnlocked] = useState(false);
   const [personalAccessChecked, setPersonalAccessChecked] = useState(false);
   const [personalAccessPassword, setPersonalAccessPassword] = useState("");
@@ -250,6 +274,7 @@ export default function Home() {
   const saveQueueRef = useRef<Promise<void>>(Promise.resolve());
   const wishlistSaveQueueRef = useRef<Promise<void>>(Promise.resolve());
   const personalSaveQueueRef = useRef<Promise<void>>(Promise.resolve());
+  const personalMonthKey = selectedPersonalMonth ?? monthKey;
 
   useEffect(() => {
     let cancelled = false;
@@ -385,11 +410,16 @@ export default function Home() {
     if (view !== "personal" || personalUnlocked || personalAccessChecked || personalCheckStartedRef.current) return;
     let cancelled = false;
     personalCheckStartedRef.current = true;
-    void loadRemotePersonalAssets().then((remote) => {
+    setPersonalLoading(true);
+    void loadRemotePersonalAssets(personalMonthKey).then((remote) => {
       if (cancelled) return;
       setPersonalAssets(remote.state);
       personalRevisionRef.current = remote.revision;
-      lastSavedPersonalJsonRef.current = JSON.stringify(remote.state);
+      setPersonalLoadedMonthKey(remote.monthKey);
+      setPersonalAssetMonths(remote.months);
+      lastSavedPersonalJsonRef.current = remote.source === "legacy"
+        ? null
+        : personalSaveSignature(remote.state, remote.calculation);
       setPersonalUnlocked(true);
       setPersonalAccessChecked(true);
     }).catch((caught) => {
@@ -408,37 +438,45 @@ export default function Home() {
     return () => {
       cancelled = true;
     };
-  }, [view, personalUnlocked, personalAccessChecked, personalLoading, router]);
+  }, [view, personalUnlocked, personalAccessChecked, personalMonthKey, router]);
 
   useEffect(() => {
-    if (!personalAssets || !personalUnlocked) return;
-    const serialized = JSON.stringify(personalAssets);
-    if (serialized === lastSavedPersonalJsonRef.current) return;
-    const timer = window.setTimeout(() => {
-      personalSaveQueueRef.current = personalSaveQueueRef.current.then(async () => {
-        try {
-          const saved = await saveRemotePersonalAssets(personalAssets, personalRevisionRef.current);
-          personalRevisionRef.current = saved.revision;
-          lastSavedPersonalJsonRef.current = serialized;
-          setPersonalAccessError(null);
-        } catch (caught) {
-          if (caught instanceof AuthenticationRequiredError) {
-            router.replace("/login");
-            return;
-          }
-          if (caught instanceof AdminAuthenticationRequiredError) {
-            setPersonalUnlocked(false);
-            setPersonalAssets(null);
-            setPersonalAccessChecked(true);
-            setPersonalAccessError("個人資産の認証期限が切れました。もう一度パスワードを入力してください。");
-            return;
-          }
-          setPersonalAccessError(caught instanceof Error ? caught.message : "個人資産を保存できませんでした。");
-        }
-      });
-    }, 800);
-    return () => window.clearTimeout(timer);
-  }, [personalAssets, personalUnlocked, router]);
+    if (view !== "personal"
+      || !personalUnlocked
+      || !personalAccessChecked
+      || personalLoadedMonthKey === personalMonthKey) return;
+    let cancelled = false;
+    void loadRemotePersonalAssets(personalMonthKey).then((remote) => {
+      if (cancelled) return;
+      setPersonalAssets(remote.state);
+      personalRevisionRef.current = remote.revision;
+      setPersonalLoadedMonthKey(remote.monthKey);
+      setPersonalAssetMonths(remote.months);
+      lastSavedPersonalJsonRef.current = remote.source === "legacy"
+        ? null
+        : personalSaveSignature(remote.state, remote.calculation);
+      setPersonalAccessError(null);
+    }).catch((caught) => {
+      if (cancelled) return;
+      if (caught instanceof AuthenticationRequiredError) {
+        router.replace("/login");
+        return;
+      }
+      if (caught instanceof AdminAuthenticationRequiredError) {
+        setPersonalUnlocked(false);
+        setPersonalAssets(null);
+        setPersonalAccessChecked(true);
+        setPersonalAccessError("個人資産の認証期限が切れました。もう一度パスワードを入力してください。");
+        return;
+      }
+      setPersonalAccessError(caught instanceof Error ? caught.message : "個人資産を読み込めませんでした。");
+    }).finally(() => {
+      if (!cancelled) setPersonalLoading(false);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [view, personalUnlocked, personalAccessChecked, personalLoadedMonthKey, personalMonthKey, router]);
 
   const amexAmount = useMemo(
     () => records.filter((record) => record.included).reduce((sum, record) => sum + record.amount, 0),
@@ -454,7 +492,6 @@ export default function Home() {
   const includedCount = records.filter((record) => record.included).length;
   const excludedCount = records.filter((record) => !record.included).length;
   const wishlistSummary = useMemo(() => summarizeWishlist(wishlist), [wishlist]);
-  const personalMonthKey = selectedPersonalMonth ?? monthKey;
   const personalMonthSummaries = useMemo<PersonalMonthSummary[]>(() => {
     const summaries = new Map<string, PersonalMonthSummary>();
     summaries.set(monthKey, {
@@ -475,6 +512,67 @@ export default function Home() {
     }
     return [...summaries.values()];
   }, [amexStatementAmount, historyEntries, manualAmount, monthKey, perPersonSettlement]);
+
+  const selectedPersonalSummary = useMemo(
+    () => personalMonthSummaries.find((summary) => summary.monthKey === personalMonthKey) ?? {
+      monthKey: personalMonthKey,
+      claimAmount: 0,
+      amexStatementAmount: 0,
+      otherAmount: 0,
+    },
+    [personalMonthKey, personalMonthSummaries],
+  );
+  const personalCalculation = useMemo<PersonalCalculationSnapshot | null>(() => {
+    if (!personalAssets) return null;
+    const result = calculatePersonalFinance(personalAssets, selectedPersonalSummary);
+    return {
+      monthKey: personalMonthKey,
+      remainingMoney: result.remainingMoney,
+      totalAssets: result.totalAssets,
+      investableAmount: result.investableAmount,
+    };
+  }, [personalAssets, personalMonthKey, selectedPersonalSummary]);
+
+  useEffect(() => {
+    if (!personalAssets
+      || !personalUnlocked
+      || personalLoading
+      || personalLoadedMonthKey !== personalMonthKey
+      || !personalCalculation) return;
+    const serialized = personalSaveSignature(personalAssets, personalCalculation);
+    if (serialized === lastSavedPersonalJsonRef.current) return;
+    const timer = window.setTimeout(() => {
+      personalSaveQueueRef.current = personalSaveQueueRef.current.then(async () => {
+        try {
+          const saved = await saveRemotePersonalAssets(
+            personalAssets,
+            personalMonthKey,
+            personalRevisionRef.current,
+            personalCalculation,
+          );
+          personalRevisionRef.current = saved.revision;
+          lastSavedPersonalJsonRef.current = serialized;
+          setPersonalAssetMonths((current) => [...new Set([...current, personalMonthKey])].sort((left, right) => right.localeCompare(left)));
+          setPersonalAccessError(null);
+        } catch (caught) {
+          if (caught instanceof AuthenticationRequiredError) {
+            router.replace("/login");
+            return;
+          }
+          if (caught instanceof AdminAuthenticationRequiredError) {
+            setPersonalUnlocked(false);
+            setPersonalAssets(null);
+            setPersonalLoadedMonthKey(null);
+            setPersonalAccessChecked(true);
+            setPersonalAccessError("個人資産の認証期限が切れました。もう一度パスワードを入力してください。");
+            return;
+          }
+          setPersonalAccessError(caught instanceof Error ? caught.message : "個人資産を保存できませんでした。");
+        }
+      });
+    }, 800);
+    return () => window.clearTimeout(timer);
+  }, [personalAssets, personalCalculation, personalLoading, personalLoadedMonthKey, personalMonthKey, personalUnlocked, router]);
 
   const projections = useMemo(
     () => Object.fromEntries(modes.map(({ key }) => [key, buildProjection(simulation, key)])) as Record<SimulationMode, ReturnType<typeof buildProjection>>,
@@ -617,10 +715,14 @@ export default function Home() {
     setPersonalAccessError(null);
     try {
       await loginPersonalAssets(personalAccessPassword);
-      const remote = await loadRemotePersonalAssets();
+      const remote = await loadRemotePersonalAssets(personalMonthKey);
       setPersonalAssets(remote.state);
       personalRevisionRef.current = remote.revision;
-      lastSavedPersonalJsonRef.current = JSON.stringify(remote.state);
+      setPersonalLoadedMonthKey(remote.monthKey);
+      setPersonalAssetMonths(remote.months);
+      lastSavedPersonalJsonRef.current = remote.source === "legacy"
+        ? null
+        : personalSaveSignature(remote.state, remote.calculation);
       setPersonalUnlocked(true);
       setPersonalAccessChecked(true);
       setPersonalAccessPassword("");
@@ -640,6 +742,7 @@ export default function Home() {
     await fetch("/api/admin/auth", { method: "DELETE" });
     setPersonalAssets(null);
     setPersonalUnlocked(false);
+    setPersonalLoadedMonthKey(null);
     setPersonalAccessChecked(true);
     setPersonalAccessPassword("");
     setPersonalAccessError(null);
@@ -652,6 +755,12 @@ export default function Home() {
       personalCheckStartedRef.current = false;
       setPersonalLoading(true);
     }
+  };
+
+  const changePersonalMonth = (nextMonthKey: string) => {
+    if (nextMonthKey === personalMonthKey) return;
+    setPersonalLoading(true);
+    setSelectedPersonalMonth(nextMonthKey);
   };
 
   const addWishlistItem = () => {
@@ -1026,10 +1135,12 @@ export default function Home() {
               <PersonalAssetsPanel
                 state={personalAssets}
                 monthSummaries={personalMonthSummaries}
+                savedMonthKeys={personalAssetMonths}
                 selectedMonth={personalMonthKey}
-                onMonthChange={setSelectedPersonalMonth}
+                onMonthChange={changePersonalMonth}
                 onChange={setPersonalAssets}
                 onLogout={() => void lockPersonalAssets()}
+                monthLoading={personalLoading && personalLoadedMonthKey !== personalMonthKey}
               />
             ) : (
               <PersonalAssetsGate

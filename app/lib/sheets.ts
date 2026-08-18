@@ -1,13 +1,19 @@
 import { randomUUID } from "node:crypto";
 import { google, type sheets_v4 } from "googleapis";
 import { closingMonthKey, isMonthKey, type HouseholdState } from "./state.ts";
-import { parsePersonalAssetsState, type PersonalAssetsState } from "./personal-assets.ts";
+import {
+  parsePersonalAssetsState,
+  parsePersonalCalculationSnapshot,
+  type PersonalAssetsState,
+  type PersonalCalculationSnapshot,
+} from "./personal-assets.ts";
 import { parseWishlistItems, type WishlistItem } from "./wishlist.ts";
 
 const LEGACY_SHEET_NAME = "app_state";
 const MONTHLY_SHEET_PREFIX = "state_";
 const WISHLIST_SHEET_NAME = "wishlist";
 const PERSONAL_ASSETS_SHEET_NAME = "personal_assets";
+const PERSONAL_ASSETS_SHEET_PREFIX = "personal_assets_";
 const STATE_KEY = "household";
 const WISHLIST_META_KEY = "__meta__";
 const CHUNK_SIZE = 30_000;
@@ -35,9 +41,11 @@ export interface WishlistEnvelope {
 
 export interface PersonalAssetsEnvelope {
   version: 1;
+  monthKey?: string;
   revision: string;
   updatedAt: string;
   state: PersonalAssetsState;
+  calculation: PersonalCalculationSnapshot | null;
 }
 
 let cachedService: sheets_v4.Sheets | null = null;
@@ -56,9 +64,14 @@ export function monthlySheetName(monthKey: string) {
   return `${MONTHLY_SHEET_PREFIX}${monthKey}`;
 }
 
-export function joinPayloadRows(rows: unknown[][]) {
+export function personalAssetsSheetName(monthKey: string) {
+  if (!isMonthKey(monthKey)) throw new Error("Invalid month key.");
+  return `${PERSONAL_ASSETS_SHEET_PREFIX}${monthKey}`;
+}
+
+export function joinPayloadRows(rows: unknown[][], key = STATE_KEY) {
   const chunks = rows
-    .filter((row) => row[0] === STATE_KEY)
+    .filter((row) => row[0] === key)
     .map((row) => ({ index: Number(row[1]), value: String(row[2] ?? "") }))
     .filter((row) => Number.isInteger(row.index) && row.index >= 0)
     .sort((left, right) => left.index - right.index);
@@ -203,51 +216,103 @@ export async function readHouseholdHistory(): Promise<StateEnvelope[]> {
     .sort((left, right) => (right.monthKey ?? "").localeCompare(left.monthKey ?? ""));
 }
 
-export async function readPersonalAssets(): Promise<PersonalAssetsEnvelope | null> {
-  const service = sheetsService();
-  const id = spreadsheetId();
-  await ensureStateSheet(service, id, PERSONAL_ASSETS_SHEET_NAME);
+async function readPersonalAssetsFromSheet(
+  service: sheets_v4.Sheets,
+  id: string,
+  sheetName: string,
+  monthKey?: string,
+): Promise<PersonalAssetsEnvelope | null> {
+  await ensureStateSheet(service, id, sheetName);
   const response = await service.spreadsheets.values.get({
     spreadsheetId: id,
-    range: `'${PERSONAL_ASSETS_SHEET_NAME}'!A2:E`,
+    range: `'${sheetName}'!A2:E`,
   });
-  const payload = joinPayloadRows(response.data.values ?? []);
+  const payload = joinPayloadRows(response.data.values ?? [], "personal");
   if (payload === null) return null;
   const parsed = JSON.parse(payload) as Partial<PersonalAssetsEnvelope>;
   const state = parsePersonalAssetsState(parsed.state);
+  const calculation = parsed.calculation === undefined
+    ? null
+    : parsePersonalCalculationSnapshot(parsed.calculation);
+  const storedMonthKey = parsed.monthKey ?? monthKey;
   if (parsed.version !== 1
+    || (storedMonthKey !== undefined && !isMonthKey(storedMonthKey))
     || typeof parsed.revision !== "string"
     || typeof parsed.updatedAt !== "string"
-    || !state) {
+    || !state
+    || (parsed.calculation !== undefined && !calculation)) {
     throw new Error("保存された個人資産データの形式が不正です。");
   }
-  return { version: 1, revision: parsed.revision, updatedAt: parsed.updatedAt, state };
+  return {
+    version: 1,
+    monthKey: storedMonthKey,
+    revision: parsed.revision,
+    updatedAt: parsed.updatedAt,
+    state,
+    calculation,
+  };
 }
 
-export async function writePersonalAssets(state: PersonalAssetsState, expectedRevision: string | null) {
+export async function readPersonalAssets(monthKey: string): Promise<PersonalAssetsEnvelope | null> {
   const service = sheetsService();
   const id = spreadsheetId();
-  await ensureStateSheet(service, id, PERSONAL_ASSETS_SHEET_NAME);
-  const current = await readPersonalAssets();
+  return readPersonalAssetsFromSheet(service, id, personalAssetsSheetName(monthKey), monthKey);
+}
+
+export async function readLegacyPersonalAssets(): Promise<PersonalAssetsEnvelope | null> {
+  const service = sheetsService();
+  const id = spreadsheetId();
+  return readPersonalAssetsFromSheet(service, id, PERSONAL_ASSETS_SHEET_NAME);
+}
+
+export async function readPersonalAssetMonthKeys(): Promise<string[]> {
+  const service = sheetsService();
+  const id = spreadsheetId();
+  const metadata = await service.spreadsheets.get({
+    spreadsheetId: id,
+    fields: "sheets.properties.title",
+  });
+  return (metadata.data.sheets ?? [])
+    .map((sheet) => sheet.properties?.title)
+    .filter((title): title is string => typeof title === "string"
+      && title.startsWith(PERSONAL_ASSETS_SHEET_PREFIX)
+      && isMonthKey(title.slice(PERSONAL_ASSETS_SHEET_PREFIX.length)))
+    .map((title) => title.slice(PERSONAL_ASSETS_SHEET_PREFIX.length))
+    .sort((left, right) => right.localeCompare(left));
+}
+
+export async function writePersonalAssets(
+  state: PersonalAssetsState,
+  monthKey: string,
+  calculation: PersonalCalculationSnapshot,
+  expectedRevision: string | null,
+) {
+  const service = sheetsService();
+  const id = spreadsheetId();
+  const sheetName = personalAssetsSheetName(monthKey);
+  await ensureStateSheet(service, id, sheetName);
+  const current = await readPersonalAssets(monthKey);
   if ((current?.revision ?? null) !== expectedRevision) {
     throw new SheetsConflictError("The personal assets spreadsheet was updated by another session.");
   }
 
   const envelope: PersonalAssetsEnvelope = {
     version: 1,
+    monthKey,
     revision: randomUUID(),
     updatedAt: new Date().toISOString(),
     state,
+    calculation,
   };
   const chunks = splitPayload(JSON.stringify(envelope));
   const rows = chunks.map((chunk, index) => ["personal", index, chunk, envelope.updatedAt, envelope.revision]);
   await service.spreadsheets.values.clear({
     spreadsheetId: id,
-    range: `'${PERSONAL_ASSETS_SHEET_NAME}'!A2:E`,
+    range: `'${sheetName}'!A2:E`,
   });
   await service.spreadsheets.values.update({
     spreadsheetId: id,
-    range: `'${PERSONAL_ASSETS_SHEET_NAME}'!A2:E${rows.length + 1}`,
+    range: `'${sheetName}'!A2:E${rows.length + 1}`,
     valueInputOption: "RAW",
     requestBody: { values: rows },
   });

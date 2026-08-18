@@ -57,7 +57,7 @@ flowchart LR
 | Sheets Repository | `state_YYYY-MM`シートの初期化、分割JSONの読込・更新、revision競合検知 |
 | Google Spreadsheet | 1世帯分の月別アプリ状態を永続化し、Google標準の変更履歴を保持 |
 | Wishlist Repository | 欲しいものを `wishlist` シートへ保存し、revisionで同時更新を検知 |
-| Personal Assets Repository | 個人資産を `personal_assets` シートへ保存し、revisionで同時更新を検知 |
+| Personal Assets Repository | 個人資産を `personal_assets_YYYY-MM` シートへ月別保存し、revisionで同時更新を検知 |
 
 ## 4. ディレクトリ構成
 
@@ -127,8 +127,8 @@ docs/
 | PUT | `/api/wishlist` | 欲しいものリストをrevision照合後に保存 |
 | POST | `/api/admin/auth` | 個人資産用パスワードを照合し、管理者セッションCookieを発行 |
 | DELETE | `/api/admin/auth` | 管理者セッションCookieを削除 |
-| GET | `/api/admin/assets` | 管理者セッション検証後に個人資産を取得 |
-| PUT | `/api/admin/assets` | 管理者セッションとrevisionを検証して個人資産を保存 |
+| GET | `/api/admin/assets?month=YYYY-MM` | 管理者セッション検証後に対象月の個人資産と保存済み月一覧を取得 |
+| PUT | `/api/admin/assets?month=YYYY-MM` | 管理者セッション、対象月、revisionを検証して個人資産と計算結果を保存 |
 
 ### 6.1 入力検証
 
@@ -178,7 +178,7 @@ ProductionとPreviewで値を分離する。Previewでは本番Spreadsheetを使
 - 書込失敗時はUIの編集内容を保持し、再送可能にする。
 - `wishlist` シートはA〜G列にID、名称、カテゴリ、金額、URL、更新日時、revisionを保存する。
 - 欲しいものリストの更新もrevisionを比較し、別端末の更新を上書きしない。
-- `personal_assets` シートは月次状態と同じ分割JSON形式で、給料、予備資金、口座、投資、個人支出を保存する。
+- `personal_assets_YYYY-MM` シートは月次状態と同じ分割JSON形式で、対象月の給料、予備資金、口座、メイン口座、投資、個人支出、残るお金、総資産、投資可能額を保存する。旧 `personal_assets` シートは月別保存への移行元として読み込む。
 - 個人資産APIは共有セッションに加えて管理者セッションCookieを検証し、CookieはHttpOnly・SameSite=Strictとする。
 
 ## 10. Excel解析要件

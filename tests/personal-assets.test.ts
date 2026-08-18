@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { calculatePersonalFinance, parsePersonalAssetsState } from "../app/lib/personal-assets.ts";
+import {
+  calculatePersonalFinance,
+  parsePersonalAssetsState,
+  parsePersonalCalculationSnapshot,
+} from "../app/lib/personal-assets.ts";
 
 const state = {
   monthlySalary: 300000,
@@ -40,4 +44,24 @@ test("personal asset state rejects invalid private data", () => {
   assert.equal(parsePersonalAssetsState({ ...state, accounts: [{ ...state.accounts[0], balance: -1 }] }), null);
   assert.equal(parsePersonalAssetsState({ ...state, mainAccountId: "missing" }), null);
   assert.equal(parsePersonalAssetsState({ ...state, mainAccountId: undefined })?.mainAccountId, null);
+});
+
+test("personal calculation snapshot is validated by month", () => {
+  assert.deepEqual(parsePersonalCalculationSnapshot({
+    monthKey: "2026-08",
+    remainingMoney: -1000,
+    totalAssets: 200000,
+    investableAmount: 100000,
+  }), {
+    monthKey: "2026-08",
+    remainingMoney: -1000,
+    totalAssets: 200000,
+    investableAmount: 100000,
+  });
+  assert.equal(parsePersonalCalculationSnapshot({
+    monthKey: "2026-08",
+    remainingMoney: 0,
+    totalAssets: 0,
+    investableAmount: -1,
+  }), null);
 });

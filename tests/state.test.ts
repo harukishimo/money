@@ -4,6 +4,7 @@ import { extractStatementMonth, parseAmexRows } from "../app/lib/finance.ts";
 import {
   joinPayloadRows,
   monthlySheetName,
+  personalAssetsSheetName,
   serviceAccountCredentialsFromEnvironment,
   SheetsConfigurationError,
   splitPayload,
@@ -66,6 +67,12 @@ test("sheet payload rejects missing chunk indexes", () => {
     ["household", 0, "first"],
     ["household", 2, "third"],
   ]), null);
+});
+
+test("personal asset payloads use a separate monthly sheet and key", () => {
+  assert.equal(personalAssetsSheetName("2026-08"), "personal_assets_2026-08");
+  assert.equal(joinPayloadRows([["personal", 0, "first"]], "personal"), "first");
+  assert.equal(joinPayloadRows([["household", 0, "household"]], "personal"), null);
 });
 
 test("service account credentials use email and private key environment variables", () => {

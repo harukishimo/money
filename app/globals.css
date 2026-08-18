@@ -304,6 +304,8 @@ input:focus, select:focus { border-color: var(--accent); outline: none; }
 .personal-month-toolbar select { font-size: 13px; }
 .personal-month-toolbar > span { color: var(--muted); font-size: 10px; }
 .personal-assets-layout { display: grid; grid-template-columns: 350px minmax(0, 1fr); gap: 50px; padding-top: 40px; align-items: start; }
+.personal-assets-layout.is-loading { position: relative; opacity: .55; pointer-events: none; }
+.personal-month-loading { position: absolute; z-index: 2; top: 18px; left: 50%; transform: translateX(-50%); padding: 10px 14px; border: 1px solid var(--line); background: var(--paper); color: var(--ink); font-size: 11px; white-space: nowrap; }
 .personal-input-panel { min-width: 0; border-right: 1px solid var(--line); padding-right: 30px; }
 .personal-base-form { display: grid; gap: 13px; margin-bottom: 28px; }
 .personal-base-form label, .personal-small-label { display: grid; gap: 6px; color: var(--muted); font-size: 10px; }

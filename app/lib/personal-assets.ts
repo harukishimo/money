@@ -36,6 +36,13 @@ export interface PersonalMonthSummary {
   otherAmount: number;
 }
 
+export interface PersonalCalculationSnapshot {
+  monthKey: string;
+  remainingMoney: number;
+  totalAssets: number;
+  investableAmount: number;
+}
+
 export interface PersonalProjectionRow {
   monthKey: string;
   label: string;
@@ -73,6 +80,10 @@ function isNonNegativeNumber(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value) && value >= 0 && value <= Number.MAX_SAFE_INTEGER;
 }
 
+function isFiniteNumber(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value);
+}
+
 function isText(value: unknown, minLength: number, maxLength: number) {
   return typeof value === "string" && value.trim().length >= minLength && value.trim().length <= maxLength;
 }
@@ -107,6 +118,22 @@ function isPersonalExpense(value: unknown): value is PersonalExpense {
     && isMonthKey(value.monthKey)
     && isText(value.label, 1, 120)
     && isNonNegativeNumber(value.amount);
+}
+
+export function parsePersonalCalculationSnapshot(value: unknown): PersonalCalculationSnapshot | null {
+  if (!isRecord(value)
+    || !isMonthKey(value.monthKey)
+    || !isFiniteNumber(value.remainingMoney)
+    || !isFiniteNumber(value.totalAssets)
+    || !isNonNegativeNumber(value.investableAmount)) {
+    return null;
+  }
+  return {
+    monthKey: value.monthKey,
+    remainingMoney: value.remainingMoney,
+    totalAssets: value.totalAssets,
+    investableAmount: value.investableAmount,
+  };
 }
 
 export function createDefaultPersonalAssetsState(): PersonalAssetsState {

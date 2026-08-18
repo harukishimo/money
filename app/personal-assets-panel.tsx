@@ -12,10 +12,12 @@ import { formatMonthLabel, isMonthKey } from "./lib/state";
 interface PersonalAssetsPanelProps {
   state: PersonalAssetsState;
   monthSummaries: PersonalMonthSummary[];
+  savedMonthKeys: string[];
   selectedMonth: string;
   onMonthChange: (monthKey: string) => void;
   onChange: (state: PersonalAssetsState) => void;
   onLogout: () => void;
+  monthLoading: boolean;
 }
 
 function makeId(prefix: string) {
@@ -31,17 +33,19 @@ function moneyValue(value: string) {
 export default function PersonalAssetsPanel({
   state,
   monthSummaries,
+  savedMonthKeys,
   selectedMonth,
   onMonthChange,
   onChange,
   onLogout,
+  monthLoading,
 }: PersonalAssetsPanelProps) {
   const [accountForm, setAccountForm] = useState({ name: "", balance: "" });
   const [investmentForm, setInvestmentForm] = useState({ name: "", amount: "", returnRate: "0" });
   const [expenseForm, setExpenseForm] = useState({ monthKey: selectedMonth, label: "", amount: "" });
   const monthOptions = useMemo(
-    () => [...new Set([selectedMonth, ...monthSummaries.map((summary) => summary.monthKey), ...state.personalExpenses.map((expense) => expense.monthKey)])].sort().reverse(),
-    [monthSummaries, selectedMonth, state.personalExpenses],
+    () => [...new Set([selectedMonth, ...savedMonthKeys, ...monthSummaries.map((summary) => summary.monthKey), ...state.personalExpenses.map((expense) => expense.monthKey)])].sort().reverse(),
+    [monthSummaries, savedMonthKeys, selectedMonth, state.personalExpenses],
   );
   const selectedSummary = monthSummaries.find((summary) => summary.monthKey === selectedMonth) ?? {
     monthKey: selectedMonth,
@@ -105,7 +109,7 @@ export default function PersonalAssetsPanel({
   };
 
   return (
-    <section className="personal-assets-page" aria-labelledby="personal-assets-title">
+    <section className="personal-assets-page" aria-labelledby="personal-assets-title" aria-busy={monthLoading}>
       <div className="simulation-intro personal-assets-intro">
         <div>
           <p className="eyebrow">PRIVATE ASSETS / CASH FLOW</p>
@@ -121,10 +125,11 @@ export default function PersonalAssetsPanel({
         <label>収支を確認する月<select value={selectedMonth} onChange={(event) => { onMonthChange(event.target.value); setExpenseForm((current) => ({ ...current, monthKey: event.target.value })); }}>
           {monthOptions.map((monthKey) => <option key={monthKey} value={monthKey}>{formatMonthLabel(monthKey)}</option>)}
         </select></label>
-        <span>請求額・Amex・共有費用は月次データから自動取得</span>
+        <span>請求額・Amex・共有費用は月次データから取得。入力内容と計算結果は対象月へ自動保存</span>
       </div>
 
-      <div className="personal-assets-layout">
+      <div className={`personal-assets-layout${monthLoading ? " is-loading" : ""}`}>
+        {monthLoading && <div className="personal-month-loading">{formatMonthLabel(selectedMonth)}の個人資産を読み込んでいます…</div>}
         <aside className="personal-input-panel">
           <div className="section-heading compact"><div><p className="section-number">01</p><h2>個人資産を入力</h2></div></div>
           <div className="personal-base-form">
