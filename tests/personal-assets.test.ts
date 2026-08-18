@@ -65,3 +65,18 @@ test("personal calculation snapshot is validated by month", () => {
     investableAmount: -1,
   }), null);
 });
+
+test("reserve target is editable per month and changes investable amount", () => {
+  const parsed = parsePersonalAssetsState(state);
+  assert.ok(parsed);
+  const month = {
+    monthKey: "2026-07",
+    claimAmount: 50000,
+    amexStatementAmount: 228710,
+    otherAmount: 60000,
+  };
+  const defaultReserve = calculatePersonalFinance(parsed, month);
+  const customReserve = calculatePersonalFinance({ ...parsed, reserveTarget: 250000 }, month);
+  assert.equal(defaultReserve.investableAmount, 191290);
+  assert.equal(customReserve.investableAmount, 41290);
+});
