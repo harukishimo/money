@@ -231,7 +231,7 @@ export default function PersonalAssetsPanel({
               <div><span>インカムゲイン側</span><strong>{formatYen(result.incomeGainBudget)}</strong><small>80%</small></div>
               <div><span>キャピタルゲイン側</span><strong>{formatYen(result.capitalGainBudget)}</strong><small>20%</small></div>
             </div>
-            <p className="detail-note">投資に使える金額は、総資産から設定した予備資金を引いた金額です。配分は試算上の目安で、実際の購入判断や投資助言ではありません。</p>
+            <p className="detail-note">投資に使える金額は、投資済み評価額を除いた現金資産から設定した予備資金を引いた金額です。配分は試算上の目安で、実際の購入判断や投資助言ではありません。</p>
           </div>
 
           <div className="personal-investment-card">

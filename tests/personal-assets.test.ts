@@ -31,9 +31,9 @@ test("personal assets calculate remaining money and total assets", () => {
   assert.equal(result.accountTotal, 500000);
   assert.equal(result.investmentValue, 110000);
   assert.equal(result.totalAssets, 301290);
-  assert.equal(result.investableAmount, 201290);
-  assert.equal(result.incomeGainBudget, 161032);
-  assert.equal(result.capitalGainBudget, 40258);
+  assert.equal(result.investableAmount, 91290);
+  assert.equal(result.incomeGainBudget, 73032);
+  assert.equal(result.capitalGainBudget, 18258);
   assert.equal(result.monthlyProjection[0].estimatedAssets, 342580);
 });
 
@@ -89,6 +89,6 @@ test("reserve target is editable as a shared setting and changes investable amou
   };
   const defaultReserve = calculatePersonalFinance(parsed, month);
   const customReserve = calculatePersonalFinance({ ...parsed, reserveTarget: 250000 }, month);
-  assert.equal(defaultReserve.investableAmount, 201290);
-  assert.equal(customReserve.investableAmount, 51290);
+  assert.equal(defaultReserve.investableAmount, 91290);
+  assert.equal(customReserve.investableAmount, 0);
 });
