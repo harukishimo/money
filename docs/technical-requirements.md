@@ -57,7 +57,7 @@ flowchart LR
 | Sheets Repository | `state_YYYY-MM`シートの初期化、分割JSONの読込・更新、revision競合検知 |
 | Google Spreadsheet | 1世帯分の月別アプリ状態を永続化し、Google標準の変更履歴を保持 |
 | Wishlist Repository | 欲しいものを `wishlist` シートへ保存し、revisionで同時更新を検知 |
-| Personal Assets Repository | 個人資産を `personal_assets_YYYY-MM` シートへ月別保存し、revisionで同時更新を検知 |
+| Personal Assets Repository | 個人資産を `personal_assets_YYYY-MM` シートへ月別保存し、共通の予備資金を `personal_settings` シートへ保存してrevisionで同時更新を検知 |
 
 ## 4. ディレクトリ構成
 
@@ -178,7 +178,7 @@ ProductionとPreviewで値を分離する。Previewでは本番Spreadsheetを使
 - 書込失敗時はUIの編集内容を保持し、再送可能にする。
 - `wishlist` シートはA〜G列にID、名称、カテゴリ、金額、URL、更新日時、revisionを保存する。
 - 欲しいものリストの更新もrevisionを比較し、別端末の更新を上書きしない。
-- `personal_assets_YYYY-MM` シートは月次状態と同じ分割JSON形式で、対象月の給料、予備資金、口座、メイン口座、投資、個人支出、残るお金、総資産、投資可能額を保存する。予備資金は対象月ごとに0円以上で自由に変更でき、新規月のみ初期値10万円を使用する。旧 `personal_assets` シートは月別保存への移行元として読み込む。
+- `personal_assets_YYYY-MM` シートは月次状態と同じ分割JSON形式で、対象月の給料、口座、メイン口座、投資、個人支出、残るお金、総資産、投資可能額を保存する。`personal_settings` シートには対象月に依存しない手元の予備資金を保存し、0円以上で自由に変更できる。旧 `personal_assets` シートは月別保存への移行元として読み込む。既存の月別データしかない場合は、最新月の予備資金を共通設定へ移行する。
 - 個人資産APIは共有セッションに加えて管理者セッションCookieを検証し、CookieはHttpOnly・SameSite=Strictとする。
 
 ## 10. Excel解析要件

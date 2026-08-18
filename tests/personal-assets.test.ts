@@ -66,7 +66,7 @@ test("personal calculation snapshot is validated by month", () => {
   }), null);
 });
 
-test("reserve target is editable per month and changes investable amount", () => {
+test("reserve target is editable as a shared setting and changes investable amount", () => {
   const parsed = parsePersonalAssetsState(state);
   assert.ok(parsed);
   const month = {

@@ -4,6 +4,7 @@ import { closingMonthKey, isMonthKey, type HouseholdState } from "./state.ts";
 import {
   parsePersonalAssetsState,
   parsePersonalCalculationSnapshot,
+  parsePersonalReserveTarget,
   type PersonalAssetsState,
   type PersonalCalculationSnapshot,
 } from "./personal-assets.ts";
@@ -14,6 +15,8 @@ const MONTHLY_SHEET_PREFIX = "state_";
 const WISHLIST_SHEET_NAME = "wishlist";
 const PERSONAL_ASSETS_SHEET_NAME = "personal_assets";
 const PERSONAL_ASSETS_SHEET_PREFIX = "personal_assets_";
+const PERSONAL_SETTINGS_SHEET_NAME = "personal_settings";
+const PERSONAL_SETTINGS_KEY = "personal_settings";
 const STATE_KEY = "household";
 const WISHLIST_META_KEY = "__meta__";
 const CHUNK_SIZE = 30_000;
@@ -48,6 +51,13 @@ export interface PersonalAssetsEnvelope {
   calculation: PersonalCalculationSnapshot | null;
 }
 
+export interface PersonalSettingsEnvelope {
+  version: 1;
+  revision: string;
+  updatedAt: string;
+  reserveTarget: number;
+}
+
 let cachedService: sheets_v4.Sheets | null = null;
 
 export function splitPayload(payload: string, chunkSize = CHUNK_SIZE) {
@@ -67,6 +77,10 @@ export function monthlySheetName(monthKey: string) {
 export function personalAssetsSheetName(monthKey: string) {
   if (!isMonthKey(monthKey)) throw new Error("Invalid month key.");
   return `${PERSONAL_ASSETS_SHEET_PREFIX}${monthKey}`;
+}
+
+export function personalSettingsSheetName() {
+  return PERSONAL_SETTINGS_SHEET_NAME;
 }
 
 export function joinPayloadRows(rows: unknown[][], key = STATE_KEY) {
@@ -265,6 +279,36 @@ export async function readLegacyPersonalAssets(): Promise<PersonalAssetsEnvelope
   return readPersonalAssetsFromSheet(service, id, PERSONAL_ASSETS_SHEET_NAME);
 }
 
+async function readPersonalSettingsFromSheet(service: sheets_v4.Sheets, id: string) {
+  await ensureStateSheet(service, id, PERSONAL_SETTINGS_SHEET_NAME);
+  const response = await service.spreadsheets.values.get({
+    spreadsheetId: id,
+    range: `'${PERSONAL_SETTINGS_SHEET_NAME}'!A2:E`,
+  });
+  const payload = joinPayloadRows(response.data.values ?? [], PERSONAL_SETTINGS_KEY);
+  if (payload === null) return null;
+  const parsed = JSON.parse(payload) as Partial<PersonalSettingsEnvelope>;
+  const reserveTarget = parsePersonalReserveTarget(parsed.reserveTarget);
+  if (parsed.version !== 1
+    || typeof parsed.revision !== "string"
+    || typeof parsed.updatedAt !== "string"
+    || reserveTarget === null) {
+    throw new Error("保存された個人資産設定の形式が不正です。");
+  }
+  return {
+    version: 1 as const,
+    revision: parsed.revision,
+    updatedAt: parsed.updatedAt,
+    reserveTarget,
+  };
+}
+
+export async function readPersonalSettings(): Promise<PersonalSettingsEnvelope | null> {
+  const service = sheetsService();
+  const id = spreadsheetId();
+  return readPersonalSettingsFromSheet(service, id);
+}
+
 export async function readPersonalAssetMonthKeys(): Promise<string[]> {
   const service = sheetsService();
   const id = spreadsheetId();
@@ -286,14 +330,19 @@ export async function writePersonalAssets(
   monthKey: string,
   calculation: PersonalCalculationSnapshot,
   expectedRevision: string | null,
+  expectedSettingsRevision: string | null,
 ) {
   const service = sheetsService();
   const id = spreadsheetId();
   const sheetName = personalAssetsSheetName(monthKey);
   await ensureStateSheet(service, id, sheetName);
   const current = await readPersonalAssets(monthKey);
+  const currentSettings = await readPersonalSettingsFromSheet(service, id);
   if ((current?.revision ?? null) !== expectedRevision) {
     throw new SheetsConflictError("The personal assets spreadsheet was updated by another session.");
+  }
+  if ((currentSettings?.revision ?? null) !== expectedSettingsRevision) {
+    throw new SheetsConflictError("The personal reserve setting was updated by another session.");
   }
 
   const envelope: PersonalAssetsEnvelope = {
@@ -304,8 +353,26 @@ export async function writePersonalAssets(
     state,
     calculation,
   };
+  const settingsEnvelope: PersonalSettingsEnvelope = {
+    version: 1,
+    revision: randomUUID(),
+    updatedAt: envelope.updatedAt,
+    reserveTarget: state.reserveTarget,
+  };
   const chunks = splitPayload(JSON.stringify(envelope));
   const rows = chunks.map((chunk, index) => ["personal", index, chunk, envelope.updatedAt, envelope.revision]);
+  const settingsChunks = splitPayload(JSON.stringify(settingsEnvelope));
+  const settingsRows = settingsChunks.map((chunk, index) => [PERSONAL_SETTINGS_KEY, index, chunk, settingsEnvelope.updatedAt, settingsEnvelope.revision]);
+  await service.spreadsheets.values.clear({
+    spreadsheetId: id,
+    range: `'${PERSONAL_SETTINGS_SHEET_NAME}'!A2:E`,
+  });
+  await service.spreadsheets.values.update({
+    spreadsheetId: id,
+    range: `'${PERSONAL_SETTINGS_SHEET_NAME}'!A2:E${settingsRows.length + 1}`,
+    valueInputOption: "RAW",
+    requestBody: { values: settingsRows },
+  });
   await service.spreadsheets.values.clear({
     spreadsheetId: id,
     range: `'${sheetName}'!A2:E`,
@@ -316,7 +383,7 @@ export async function writePersonalAssets(
     valueInputOption: "RAW",
     requestBody: { values: rows },
   });
-  return envelope;
+  return { ...envelope, settingsRevision: settingsEnvelope.revision };
 }
 
 export async function readWishlist(): Promise<WishlistEnvelope> {

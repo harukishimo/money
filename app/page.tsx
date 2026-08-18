@@ -184,6 +184,7 @@ async function loadRemotePersonalAssets(monthKey: string) {
   return adminResponseJson<{
     state: PersonalAssetsState;
     revision: string | null;
+    settingsRevision: string | null;
     updatedAt: string | null;
     calculation: PersonalCalculationSnapshot | null;
     monthKey: string;
@@ -205,14 +206,15 @@ async function saveRemotePersonalAssets(
   state: PersonalAssetsState,
   monthKey: string,
   expectedRevision: string | null,
+  expectedSettingsRevision: string | null,
   calculation: PersonalCalculationSnapshot,
 ) {
   const response = await fetch(`/api/admin/assets?month=${encodeURIComponent(monthKey)}`, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ state, expectedRevision, calculation }),
+    body: JSON.stringify({ state, expectedRevision, expectedSettingsRevision, calculation }),
   });
-  return adminResponseJson<{ state: PersonalAssetsState; revision: string; updatedAt: string; monthKey: string; calculation: PersonalCalculationSnapshot }>(response);
+  return adminResponseJson<{ state: PersonalAssetsState; revision: string; settingsRevision: string; updatedAt: string; monthKey: string; calculation: PersonalCalculationSnapshot }>(response);
 }
 
 function personalSaveSignature(state: PersonalAssetsState, calculation: PersonalCalculationSnapshot | null) {
@@ -268,6 +270,7 @@ export default function Home() {
   const revisionRef = useRef<string | null>(null);
   const wishlistRevisionRef = useRef<string | null>(null);
   const personalRevisionRef = useRef<string | null>(null);
+  const personalSettingsRevisionRef = useRef<string | null>(null);
   const lastSavedPersonalJsonRef = useRef<string | null>(null);
   const personalCheckStartedRef = useRef(false);
   const lastSavedJsonRef = useRef<string | null>(null);
@@ -415,6 +418,7 @@ export default function Home() {
       if (cancelled) return;
       setPersonalAssets(remote.state);
       personalRevisionRef.current = remote.revision;
+      personalSettingsRevisionRef.current = remote.settingsRevision;
       setPersonalLoadedMonthKey(remote.monthKey);
       setPersonalAssetMonths(remote.months);
       lastSavedPersonalJsonRef.current = remote.source === "legacy"
@@ -450,6 +454,7 @@ export default function Home() {
       if (cancelled) return;
       setPersonalAssets(remote.state);
       personalRevisionRef.current = remote.revision;
+      personalSettingsRevisionRef.current = remote.settingsRevision;
       setPersonalLoadedMonthKey(remote.monthKey);
       setPersonalAssetMonths(remote.months);
       lastSavedPersonalJsonRef.current = remote.source === "legacy"
@@ -465,6 +470,8 @@ export default function Home() {
       if (caught instanceof AdminAuthenticationRequiredError) {
         setPersonalUnlocked(false);
         setPersonalAssets(null);
+        personalRevisionRef.current = null;
+        personalSettingsRevisionRef.current = null;
         setPersonalAccessChecked(true);
         setPersonalAccessError("個人資産の認証期限が切れました。もう一度パスワードを入力してください。");
         return;
@@ -548,9 +555,11 @@ export default function Home() {
             personalAssets,
             personalMonthKey,
             personalRevisionRef.current,
+            personalSettingsRevisionRef.current,
             personalCalculation,
           );
           personalRevisionRef.current = saved.revision;
+          personalSettingsRevisionRef.current = saved.settingsRevision;
           lastSavedPersonalJsonRef.current = serialized;
           setPersonalAssetMonths((current) => [...new Set([...current, personalMonthKey])].sort((left, right) => right.localeCompare(left)));
           setPersonalAccessError(null);
@@ -563,6 +572,8 @@ export default function Home() {
             setPersonalUnlocked(false);
             setPersonalAssets(null);
             setPersonalLoadedMonthKey(null);
+            personalRevisionRef.current = null;
+            personalSettingsRevisionRef.current = null;
             setPersonalAccessChecked(true);
             setPersonalAccessError("個人資産の認証期限が切れました。もう一度パスワードを入力してください。");
             return;
@@ -718,6 +729,7 @@ export default function Home() {
       const remote = await loadRemotePersonalAssets(personalMonthKey);
       setPersonalAssets(remote.state);
       personalRevisionRef.current = remote.revision;
+      personalSettingsRevisionRef.current = remote.settingsRevision;
       setPersonalLoadedMonthKey(remote.monthKey);
       setPersonalAssetMonths(remote.months);
       lastSavedPersonalJsonRef.current = remote.source === "legacy"
@@ -743,6 +755,8 @@ export default function Home() {
     setPersonalAssets(null);
     setPersonalUnlocked(false);
     setPersonalLoadedMonthKey(null);
+    personalRevisionRef.current = null;
+    personalSettingsRevisionRef.current = null;
     setPersonalAccessChecked(true);
     setPersonalAccessPassword("");
     setPersonalAccessError(null);

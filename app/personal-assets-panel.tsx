@@ -134,9 +134,9 @@ export default function PersonalAssetsPanel({
           <div className="section-heading compact"><div><p className="section-number">01</p><h2>個人資産を入力</h2></div></div>
           <div className="personal-base-form">
             <label>自分の月給<div className="input-with-suffix"><input type="number" min="0" value={state.monthlySalary} onChange={(event) => onChange({ ...state, monthlySalary: Math.max(0, Number(event.target.value) || 0) })} /><span>円</span></div></label>
-            <label>対象月に残す予備資金<div className="input-with-suffix"><input aria-label="対象月に残す予備資金" type="number" min="0" value={state.reserveTarget} onChange={(event) => onChange({ ...state, reserveTarget: Math.max(0, Number(event.target.value) || 0) })} /><span>円</span></div></label>
+            <label>手元に残す予備資金<div className="input-with-suffix"><input aria-label="手元に残す予備資金" type="number" min="0" value={state.reserveTarget} onChange={(event) => onChange({ ...state, reserveTarget: Math.max(0, Number(event.target.value) || 0) })} /><span>円</span></div></label>
           </div>
-          <p className="detail-note personal-reserve-note">予備資金は対象月ごとに保存されます。月を切り替えた後も、その月の金額を自由に変更できます。</p>
+          <p className="detail-note personal-reserve-note">予備資金は月を跨いでも共通設定として保持されます。いつでも自由に変更できます。</p>
 
           <details open>
             <summary>口座残高・メイン口座</summary>

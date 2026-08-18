@@ -84,6 +84,10 @@ function isFiniteNumber(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value);
 }
 
+export function parsePersonalReserveTarget(value: unknown) {
+  return isNonNegativeNumber(value) ? value : null;
+}
+
 function isText(value: unknown, minLength: number, maxLength: number) {
   return typeof value === "string" && value.trim().length >= minLength && value.trim().length <= maxLength;
 }
@@ -148,9 +152,10 @@ export function createDefaultPersonalAssetsState(): PersonalAssetsState {
 }
 
 export function parsePersonalAssetsState(value: unknown): PersonalAssetsState | null {
+  const reserveTarget = isRecord(value) ? parsePersonalReserveTarget(value.reserveTarget) : null;
   if (!isRecord(value)
     || !isNonNegativeNumber(value.monthlySalary)
-    || !isNonNegativeNumber(value.reserveTarget)
+    || reserveTarget === null
     || !Array.isArray(value.accounts)
     || value.accounts.length > 100
     || !value.accounts.every(isAccount)
@@ -169,7 +174,7 @@ export function parsePersonalAssetsState(value: unknown): PersonalAssetsState | 
   }
   return {
     monthlySalary: value.monthlySalary,
-    reserveTarget: value.reserveTarget,
+    reserveTarget,
     accounts: value.accounts.map((account) => ({ ...account, name: account.name.trim() })),
     mainAccountId,
     investments: value.investments.map((investment) => ({ ...investment, name: investment.name.trim() })),

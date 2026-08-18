@@ -5,6 +5,7 @@ import {
   readLegacyPersonalAssets,
   readPersonalAssets,
   readPersonalAssetMonthKeys,
+  readPersonalSettings,
   SheetsConfigurationError,
   SheetsConflictError,
   writePersonalAssets,
@@ -53,14 +54,28 @@ export async function GET(request: NextRequest) {
     const monthlyEnvelope = await readPersonalAssets(monthKey);
     const legacyEnvelope = monthlyEnvelope || monthKey !== closingMonthKey() ? null : await readLegacyPersonalAssets();
     const envelope = monthlyEnvelope ?? legacyEnvelope;
+    const settings = await readPersonalSettings();
+    const months = await readPersonalAssetMonthKeys();
+    const baseState = envelope?.state ?? createDefaultPersonalAssetsState();
+    let reserveTarget = settings?.reserveTarget ?? envelope?.state.reserveTarget;
+    if (reserveTarget === undefined) {
+      for (const candidateMonth of months) {
+        const candidate = await readPersonalAssets(candidateMonth);
+        if (candidate) {
+          reserveTarget = candidate.state.reserveTarget;
+          break;
+        }
+      }
+    }
     return json({
-      state: envelope?.state ?? createDefaultPersonalAssetsState(),
+      state: { ...baseState, reserveTarget: reserveTarget ?? baseState.reserveTarget },
       revision: monthlyEnvelope?.revision ?? null,
+      settingsRevision: settings?.revision ?? null,
       updatedAt: envelope?.updatedAt ?? null,
       calculation: envelope?.calculation ?? null,
       monthKey,
       source: monthlyEnvelope ? "month" : legacyEnvelope ? "legacy" : "empty",
-      months: await readPersonalAssetMonthKeys(),
+      months,
     });
   } catch (error) {
     return handleError(error);
@@ -74,9 +89,9 @@ export async function PUT(request: NextRequest) {
   try {
     const rawBody = await request.text();
     if (Buffer.byteLength(rawBody, "utf8") > 500_000) return json({ error: "個人資産データが大きすぎます。" }, 413);
-    let body: { state?: unknown; expectedRevision?: unknown; calculation?: unknown };
+    let body: { state?: unknown; expectedRevision?: unknown; expectedSettingsRevision?: unknown; calculation?: unknown };
     try {
-      body = JSON.parse(rawBody) as { state?: unknown; expectedRevision?: unknown; calculation?: unknown };
+      body = JSON.parse(rawBody) as { state?: unknown; expectedRevision?: unknown; expectedSettingsRevision?: unknown; calculation?: unknown };
     } catch {
       return json({ error: "保存内容がJSONではありません。" }, 400);
     }
@@ -84,12 +99,15 @@ export async function PUT(request: NextRequest) {
     const expectedRevision = body.expectedRevision === null || typeof body.expectedRevision === "string"
       ? body.expectedRevision
       : undefined;
+    const expectedSettingsRevision = body.expectedSettingsRevision === null || typeof body.expectedSettingsRevision === "string"
+      ? body.expectedSettingsRevision
+      : undefined;
     const calculation = parsePersonalCalculationSnapshot(body.calculation);
-    if (!state || expectedRevision === undefined || !calculation || calculation.monthKey !== monthKey) {
+    if (!state || expectedRevision === undefined || expectedSettingsRevision === undefined || !calculation || calculation.monthKey !== monthKey) {
       return json({ error: "個人資産の保存内容が不正です。" }, 400);
     }
-    const saved = await writePersonalAssets(state, monthKey, calculation, expectedRevision);
-    return json({ state: saved.state, revision: saved.revision, updatedAt: saved.updatedAt, monthKey, calculation: saved.calculation });
+    const saved = await writePersonalAssets(state, monthKey, calculation, expectedRevision, expectedSettingsRevision);
+    return json({ state: saved.state, revision: saved.revision, settingsRevision: saved.settingsRevision, updatedAt: saved.updatedAt, monthKey, calculation: saved.calculation });
   } catch (error) {
     return handleError(error);
   }

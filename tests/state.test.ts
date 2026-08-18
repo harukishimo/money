@@ -5,6 +5,7 @@ import {
   joinPayloadRows,
   monthlySheetName,
   personalAssetsSheetName,
+  personalSettingsSheetName,
   serviceAccountCredentialsFromEnvironment,
   SheetsConfigurationError,
   splitPayload,
@@ -71,6 +72,7 @@ test("sheet payload rejects missing chunk indexes", () => {
 
 test("personal asset payloads use a separate monthly sheet and key", () => {
   assert.equal(personalAssetsSheetName("2026-08"), "personal_assets_2026-08");
+  assert.equal(personalSettingsSheetName(), "personal_settings");
   assert.equal(joinPayloadRows([["personal", 0, "first"]], "personal"), "first");
   assert.equal(joinPayloadRows([["household", 0, "household"]], "personal"), null);
 });

@@ -47,7 +47,7 @@ Spreadsheetは `GOOGLE_SERVICE_ACCOUNT_EMAIL` のメールアドレスへ編集�
 
 欲しいものリストを初めて読み込むと、同じSpreadsheetに `wishlist` シートが自動作成されます。欲しいものリストは月次状態とは独立して保存されるため、月次締め後も保持されます。
 
-個人資産エリアを初めて開くと、同じSpreadsheetに対象月ごとの `personal_assets_YYYY-MM` シートが自動作成されます。個人資産エリアには `ADMIN_PASSWORD_HASH` による追加認証が必要です。旧 `personal_assets` シートがある場合は、最初の対象月の初期データとして移行します。
+個人資産エリアを初めて開くと、同じSpreadsheetに対象月ごとの `personal_assets_YYYY-MM` シートと、月を跨いでも保持する予備資金用の `personal_settings` シートが自動作成されます。個人資産エリアには `ADMIN_PASSWORD_HASH` による追加認証が必要です。旧 `personal_assets` シートがある場合は、最初の対象月の初期データとして移行します。
 
 検証:
 
