@@ -1314,7 +1314,7 @@ function PersonalAssetsGate({
       <div className="personal-gate-card">
         <p className="eyebrow">PRIVATE ACCESS</p>
         <h1 id="personal-gate-title">個人資産エリア</h1>
-        <p>口座残高、投資額、個人支出は共有家計とは別の情報です。管理者用パスワードを入力して表示します。</p>
+        <p>口座残高、投資評価額、個人支出は共有家計とは別の情報です。管理者用パスワードを入力して表示します。</p>
         <label>個人資産用パスワード<input type="password" autoComplete="current-password" value={password} onChange={(event) => onPasswordChange(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") onUnlock(); }} /></label>
         {error && <p className="login-error" role="alert">{error}</p>}
         {!checked && loading && <p className="personal-gate-note">既存の認証状態を確認しています…</p>}

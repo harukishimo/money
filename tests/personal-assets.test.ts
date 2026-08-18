@@ -11,7 +11,7 @@ const state = {
   reserveTarget: 100000,
   accounts: [{ id: "bank", name: "生活口座", balance: 500000 }],
   mainAccountId: "bank",
-  investments: [{ id: "fund", name: "投資信託", amount: 100000, valuation: 110000, profitLossRate: 10 }],
+  investments: [{ id: "fund", name: "投資信託", valuation: 110000, profitLossRate: 10 }],
   personalExpenses: [{ id: "hobby", monthKey: "2026-07", label: "趣味", amount: 20000 }],
 };
 
@@ -29,13 +29,12 @@ test("personal assets calculate remaining money and total assets", () => {
   assert.equal(result.monthlyCashflow, 41290);
   assert.equal(result.remainingMoney, 191290);
   assert.equal(result.accountTotal, 500000);
-  assert.equal(result.investmentPrincipal, 100000);
-  assert.equal(result.totalAssets, 291290);
-  assert.equal(result.investableAmount, 191290);
-  assert.equal(result.incomeGainBudget, 153032);
-  assert.equal(result.capitalGainBudget, 38258);
-  assert.equal(result.investmentEstimatedValue, 110000);
-  assert.equal(result.monthlyProjection[0].estimatedAssets, 332580);
+  assert.equal(result.investmentValue, 110000);
+  assert.equal(result.totalAssets, 301290);
+  assert.equal(result.investableAmount, 201290);
+  assert.equal(result.incomeGainBudget, 161032);
+  assert.equal(result.capitalGainBudget, 40258);
+  assert.equal(result.monthlyProjection[0].estimatedAssets, 342580);
 });
 
 test("personal asset state rejects invalid private data", () => {
@@ -54,7 +53,6 @@ test("legacy investment return rate is migrated to valuation and profit-loss rat
   assert.deepEqual(parsed?.investments[0], {
     id: "fund",
     name: "投資信託",
-    amount: 100000,
     valuation: 110000,
     profitLossRate: 10,
   });
@@ -91,6 +89,6 @@ test("reserve target is editable as a shared setting and changes investable amou
   };
   const defaultReserve = calculatePersonalFinance(parsed, month);
   const customReserve = calculatePersonalFinance({ ...parsed, reserveTarget: 250000 }, month);
-  assert.equal(defaultReserve.investableAmount, 191290);
-  assert.equal(customReserve.investableAmount, 41290);
+  assert.equal(defaultReserve.investableAmount, 201290);
+  assert.equal(customReserve.investableAmount, 51290);
 });
