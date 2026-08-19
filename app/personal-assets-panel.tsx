@@ -222,7 +222,7 @@ export default function PersonalAssetsPanel({
             <div><span>口座残高合計</span><strong>{formatYen(result.accountTotal)}</strong></div>
             <div><span>投資評価額合計</span><strong>{formatYen(result.investmentValue)}</strong></div>
             <div><span>現時点の総資産</span><strong>{formatYen(result.totalAssets)}</strong><small>{state.mainAccountId ? "その他口座＋投資評価額＋メイン口座の残額" : "口座＋投資評価額＋残るお金"}</small></div>
-            <div><span>投資に使える金額</span><strong>{formatYen(result.investableAmount)}</strong><small>予備資金 {formatYen(result.reserveTarget)}を確保後</small></div>
+            <div><span>投資に使える金額</span><strong>{formatYen(result.investableAmount)}</strong><small>予備資金 {formatYen(result.reserveTarget)}を確保後・1,000円未満切り捨て</small></div>
           </div>
 
           <div className="personal-investment-card">
@@ -231,7 +231,7 @@ export default function PersonalAssetsPanel({
               <div><span>インカムゲイン側</span><strong>{formatYen(result.incomeGainBudget)}</strong><small>80%</small></div>
               <div><span>キャピタルゲイン側</span><strong>{formatYen(result.capitalGainBudget)}</strong><small>20%</small></div>
             </div>
-            <p className="detail-note">投資に使える金額は、投資済み評価額を除いた現金資産から設定した予備資金を引いた金額です。配分は試算上の目安で、実際の購入判断や投資助言ではありません。</p>
+            <p className="detail-note">投資に使える金額は、投資済み評価額を除いた現金資産から設定した予備資金を引き、1,000円未満を切り捨てた金額です。配分は試算上の目安で、実際の購入判断や投資助言ではありません。</p>
           </div>
 
           <div className="personal-investment-card">

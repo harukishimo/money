@@ -231,7 +231,7 @@ export function calculatePersonalFinance(
   const accountTotalExcludingMain = mainAccount ? accountTotal - mainAccountBalance : accountTotal;
   const availableCash = accountTotalExcludingMain + remainingMoney;
   const totalAssets = availableCash + investmentValue;
-  const investableAmount = Math.max(0, availableCash - state.reserveTarget);
+  const investableAmount = Math.floor(Math.max(0, availableCash - state.reserveTarget) / 1000) * 1000;
   const monthlyProjection = Array.from({ length: 12 }, (_, index) => {
     const monthNumber = index + 1;
     const monthKey = nextMonthKeyByOffset(month.monthKey, monthNumber);
