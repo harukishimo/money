@@ -232,6 +232,8 @@ export function calculatePersonalFinance(
   const availableCash = accountTotalExcludingMain + remainingMoney;
   const totalAssets = availableCash + investmentValue;
   const investableAmount = Math.floor(Math.max(0, availableCash - state.reserveTarget) / 1000) * 1000;
+  const incomeGainBudget = Math.floor(investableAmount * 0.8 / 1000) * 1000;
+  const capitalGainBudget = investableAmount - incomeGainBudget;
   const monthlyProjection = Array.from({ length: 12 }, (_, index) => {
     const monthNumber = index + 1;
     const monthKey = nextMonthKeyByOffset(month.monthKey, monthNumber);
@@ -258,8 +260,8 @@ export function calculatePersonalFinance(
     totalAssets,
     reserveTarget: state.reserveTarget,
     investableAmount,
-    incomeGainBudget: Math.round(investableAmount * 0.8),
-    capitalGainBudget: Math.round(investableAmount * 0.2),
+    incomeGainBudget,
+    capitalGainBudget,
     monthlyProjection,
   };
 }
