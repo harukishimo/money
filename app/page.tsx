@@ -7,10 +7,12 @@ import LifePlanPanel from "./life-plan-panel";
 import PersonalAssetsPanel from "./personal-assets-panel";
 import {
   buildProjection,
+  filterTransactionsByIsoDate,
   formatYen,
   parseAmexRows,
   parseCsv,
   sumAmexStatementAmount,
+  sumIncludedSettlementAmount,
   type AmexTransaction,
   type SimulationInputs,
   type SimulationMode,
@@ -253,6 +255,7 @@ export default function Home() {
   const [isClosing, setIsClosing] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [dayFilter, setDayFilter] = useState<{ monthKey: string; date: string } | null>(null);
   const [manualForm, setManualForm] = useState({
     label: "",
     category: "other" as ManualCategory,
@@ -485,9 +488,18 @@ export default function Home() {
     };
   }, [view, personalUnlocked, personalAccessChecked, personalLoadedMonthKey, personalMonthKey, router]);
 
+  const activeDayFilter = !closedAt && dayFilter?.monthKey === monthKey ? dayFilter.date : "";
   const amexAmount = useMemo(
-    () => records.filter((record) => record.included).reduce((sum, record) => sum + record.amount, 0),
+    () => sumIncludedSettlementAmount(records),
     [records],
+  );
+  const visibleRecords = useMemo(
+    () => filterTransactionsByIsoDate(records, activeDayFilter || null),
+    [activeDayFilter, records],
+  );
+  const daySettlementAmount = useMemo(
+    () => (activeDayFilter ? sumIncludedSettlementAmount(visibleRecords) : 0),
+    [activeDayFilter, visibleRecords],
   );
   const amexStatementAmount = useMemo(() => sumAmexStatementAmount(records), [records]);
   const manualAmount = useMemo(
@@ -922,6 +934,21 @@ export default function Home() {
                   <span>Amex（一人分） <b>{formatYen(Math.round(amexAmount / 2))}</b></span>
                   <span>手入力（一人分） <b>{formatYen(Math.round(manualAmount / 2))}</b></span>
                 </div>
+                {!closedAt && (
+                  <div className="day-filter">
+                    <div className="day-filter-controls">
+                      <label>日で絞り込む<input type="date" value={activeDayFilter} onChange={(event) => setDayFilter(event.target.value ? { monthKey, date: event.target.value } : null)} /></label>
+                      <button type="button" className="day-filter-clear" onClick={() => setDayFilter(null)} disabled={!activeDayFilter} aria-label="日付の絞り込みをクリア">クリア</button>
+                    </div>
+                    {activeDayFilter ? (
+                      <p className="day-total" aria-live="polite">
+                        この日のみ（精算対象）
+                        <b>{formatYen(daySettlementAmount)}</b>
+                        <small>一人分 {formatYen(Math.round(daySettlementAmount / 2))} · 月の合計は上のまま</small>
+                      </p>
+                    ) : null}
+                  </div>
+                )}
                 <button className="text-action" onClick={applyActualsToSimulation}>この実績から将来を試す <span>→</span></button>
                 <div className="closing-action">
                   <p>{closedAt ? `${formatMonthLabel(monthKey)}分・締め済み` : `${formatMonthLabel(monthKey)}分として登録`}</p>
@@ -989,7 +1016,9 @@ export default function Home() {
                     <tbody>
                       {records.length === 0 ? (
                         <tr><td colSpan={6} className="empty-cell">まだAmex明細がありません。</td></tr>
-                      ) : records.map((record) => (
+                      ) : activeDayFilter && visibleRecords.length === 0 ? (
+                        <tr><td colSpan={6} className="empty-cell">この日の明細はありません。</td></tr>
+                      ) : visibleRecords.map((record) => (
                         <tr key={record.id} className={record.included ? "included-row" : "excluded-row"}>
                           <td>
                             <input

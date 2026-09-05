@@ -83,6 +83,47 @@ function displayDate(value: unknown) {
   return normalize(value);
 }
 
+function isValidUtcYmd(year: number, month: number, day: number) {
+  if (!Number.isInteger(year) || !Number.isInteger(month) || !Number.isInteger(day)) return false;
+  if (month < 1 || month > 12 || day < 1 || day > 31) return false;
+  const date = new Date(Date.UTC(year, month - 1, day));
+  return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day;
+}
+
+/**
+ * Normalize stored Amex `date` display strings (ja-JP / slash / dotted / 年月日)
+ * so they can be compared with an HTML date input's YYYY-MM-DD value.
+ */
+export function toIsoDateKey(value: unknown): string | null {
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    return toIsoDateKey(displayDate(value));
+  }
+
+  const text = normalize(value).replace(/\s+/g, "");
+  if (!text) return null;
+
+  const match = text.match(/^(\d{4})[-/.年](\d{1,2})[-/.月](\d{1,2})日?$/);
+  if (!match) return null;
+
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  if (!isValidUtcYmd(year, month, day)) return null;
+  return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
+
+export function filterTransactionsByIsoDate(
+  records: AmexTransaction[],
+  isoDate: string | null | undefined,
+): AmexTransaction[] {
+  if (!isoDate) return records;
+  return records.filter((record) => toIsoDateKey(record.date) === isoDate);
+}
+
+export function sumIncludedSettlementAmount(records: AmexTransaction[]) {
+  return records.filter((record) => record.included).reduce((sum, record) => sum + record.amount, 0);
+}
+
 export function parseAmexRows(rows: unknown[][]): AmexTransaction[] {
   return rows.slice(7).flatMap((row, index) => {
     const rowNumber = index + 8;
