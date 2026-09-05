@@ -102,6 +102,15 @@ main { width: min(1420px, 100%); margin: 0 auto; padding: 0 4.5vw 80px; }
 .total-panel > p.total-household { margin: 10px 0 0; font-size: 12px; }
 .total-breakdown { display: flex; gap: 26px; margin-top: 20px; padding-top: 18px; border-top: 1px solid var(--line); font-size: 12px; color: var(--muted); }
 .total-breakdown b { display: block; color: var(--ink); margin-top: 4px; font-size: 16px; }
+.day-filter { margin-top: 20px; padding-top: 18px; border-top: 1px solid var(--line); }
+.day-filter-controls { display: flex; align-items: end; gap: 16px; }
+.day-filter-controls label { display: grid; gap: 6px; color: var(--muted); font-size: 11px; flex: 1; }
+.day-filter-controls input[type="date"] { max-width: 200px; }
+.day-filter-clear { border: 0; border-bottom: 1px solid var(--ink); background: transparent; padding: 0 0 5px; font-size: 12px; cursor: pointer; margin-bottom: 12px; }
+.day-filter-clear:disabled { color: var(--muted); border-bottom-color: var(--line); cursor: default; }
+.day-total { margin: 14px 0 0; color: var(--muted); font-size: 12px; }
+.day-total b { display: block; color: var(--ink); margin-top: 4px; font-size: 16px; }
+.day-total small { display: block; margin-top: 4px; font-size: 10px; }
 .text-action { margin-top: 25px; border: 0; border-bottom: 1px solid var(--ink); background: transparent; padding: 0 0 5px; font-size: 13px; cursor: pointer; }
 .text-action span { color: var(--accent); margin-left: 8px; }
 .closing-action { margin-top: 25px; padding-top: 17px; border-top: 1px solid var(--line); }
