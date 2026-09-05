@@ -65,6 +65,7 @@ export interface HouseholdState {
   simulation: SimulationInputs;
   lifePlan: LifePlanInputs;
   fileName: string;
+  amexTarget: number | null;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -85,6 +86,14 @@ function isPositiveNumber(value: unknown) {
 
 function isPercentage(value: unknown) {
   return isFiniteNumber(value) && value >= 0 && value <= 100;
+}
+
+function parseAmexTarget(value: unknown): number | null | false {
+  if (value === undefined || value === null) return null;
+  if (typeof value !== "number" || !Number.isInteger(value) || value < 0 || value > Number.MAX_SAFE_INTEGER) {
+    return false;
+  }
+  return value;
 }
 
 function isNullableFiniteNumber(value: unknown) {
@@ -149,11 +158,15 @@ export function parseHouseholdState(value: unknown): HouseholdState | null {
     : parseLifePlanInputs(value.lifePlan);
   if (!lifePlan) return null;
 
+  const amexTarget = parseAmexTarget(value.amexTarget);
+  if (amexTarget === false) return null;
+
   return {
     records: value.records,
     manualExpenses: value.manualExpenses,
     simulation: value.simulation,
     lifePlan,
     fileName: value.fileName.slice(0, 255),
+    amexTarget,
   };
 }

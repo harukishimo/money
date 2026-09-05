@@ -102,6 +102,16 @@ main { width: min(1420px, 100%); margin: 0 auto; padding: 0 4.5vw 80px; }
 .total-panel > p.total-household { margin: 10px 0 0; font-size: 12px; }
 .total-breakdown { display: flex; gap: 26px; margin-top: 20px; padding-top: 18px; border-top: 1px solid var(--line); font-size: 12px; color: var(--muted); }
 .total-breakdown b { display: block; color: var(--ink); margin-top: 4px; font-size: 16px; }
+.amex-target { margin-top: 20px; padding-top: 18px; border-top: 1px solid var(--line); }
+.amex-target label { display: grid; gap: 6px; color: var(--muted); font-size: 11px; max-width: 240px; }
+.amex-target input:disabled { opacity: .65; cursor: not-allowed; }
+.amex-target-empty { margin: 10px 0 0; color: var(--muted); font-size: 11px; line-height: 1.6; }
+.amex-target-remaining { margin: 12px 0 0; color: var(--muted); font-size: 12px; }
+.amex-target-remaining b { display: block; color: var(--ink); margin-top: 4px; font-size: 20px; }
+.amex-target-remaining small { display: block; margin-top: 4px; font-size: 10px; }
+.amex-target-remaining.over, .amex-target-remaining.over b { color: var(--danger); }
+.history-target { margin: 0; padding: 12px 17px; border: 1px solid var(--line); border-top: 0; background: var(--surface); color: var(--muted); font-size: 12px; display: flex; justify-content: space-between; gap: 16px; }
+.history-target.over { color: var(--danger); }
 .day-filter { margin-top: 20px; padding-top: 18px; border-top: 1px solid var(--line); }
 .day-filter-controls { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
 .day-filter-label { margin: 0; color: var(--muted); font-size: 11px; }

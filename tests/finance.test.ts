@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  amexTargetRemaining,
   buildProjection,
   filterTransactionsByIsoDate,
   filterTransactionsByIsoDateRange,
@@ -121,6 +122,14 @@ test("inclusive date range swaps reversed bounds and sums included amounts", () 
   assert.equal(swapped.length, 4);
   assert.equal(sumIncludedSettlementAmount(swapped), 22680);
   assert.equal(filterTransactionsByIsoDateRange(parsed, null, null).length, 4);
+});
+
+test("amex target remaining subtracts included settlement and flags over-budget", () => {
+  assert.deepEqual(amexTargetRemaining(null, 22680), { target: null, remaining: null, overBudget: false });
+  assert.deepEqual(amexTargetRemaining(30000, 22680), { target: 30000, remaining: 7320, overBudget: false });
+  assert.deepEqual(amexTargetRemaining(20000, 22680), { target: 20000, remaining: -2680, overBudget: true });
+  assert.deepEqual(amexTargetRemaining(0, 0), { target: 0, remaining: 0, overBudget: false });
+  assert.deepEqual(amexTargetRemaining(0, 100), { target: 0, remaining: -100, overBudget: true });
 });
 
 test("projection applies scenario swing, growth and one-off expense", () => {

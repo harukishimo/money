@@ -6,6 +6,7 @@ import { readSheet } from "read-excel-file/browser";
 import LifePlanPanel from "./life-plan-panel";
 import PersonalAssetsPanel from "./personal-assets-panel";
 import {
+  amexTargetRemaining,
   buildProjection,
   filterTransactionsByIsoDateRange,
   formatIsoDateSlash,
@@ -112,6 +113,7 @@ function emptyHouseholdState(): HouseholdState {
     simulation: defaultSimulation,
     lifePlan: createDefaultLifePlanInputs(),
     fileName: "未取込",
+    amexTarget: null,
   };
 }
 
@@ -263,6 +265,7 @@ export default function Home() {
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [dayFilter, setDayFilter] = useState<DayRangeFilter | null>(null);
+  const [amexTarget, setAmexTarget] = useState<number | null>(null);
   const [manualForm, setManualForm] = useState({
     label: "",
     category: "other" as ManualCategory,
@@ -333,6 +336,7 @@ export default function Home() {
           setSimulation({ ...defaultSimulation, ...remoteState.simulation });
           setLifePlan(remoteState.lifePlan);
           setFileName(remoteState.fileName || "保存済み明細");
+          setAmexTarget(remoteState.amexTarget);
           setIsDemo(false);
           setClosedAt(remote.closedAt ?? null);
           if (remote.source === "legacy") {
@@ -353,6 +357,7 @@ export default function Home() {
             setSimulation({ ...defaultSimulation, ...legacyState.simulation });
             setLifePlan(legacyState.lifePlan);
             setFileName(legacyState.fileName || "移行済み明細");
+            setAmexTarget(legacyState.amexTarget);
             setIsDemo(false);
             setClosedAt(null);
             revisionRef.current = null;
@@ -365,6 +370,7 @@ export default function Home() {
             setSimulation(emptyState.simulation);
             setLifePlan(emptyState.lifePlan);
             setFileName(emptyState.fileName);
+            setAmexTarget(emptyState.amexTarget);
             setIsDemo(false);
             setClosedAt(null);
             revisionRef.current = null;
@@ -393,7 +399,7 @@ export default function Home() {
 
   useEffect(() => {
     if (!hydrated || !historyReady || loadedMonthKey !== monthKey || isDemo) return;
-    const state: HouseholdState = { records, manualExpenses, simulation, lifePlan, fileName };
+    const state: HouseholdState = { records, manualExpenses, simulation, lifePlan, fileName, amexTarget };
     const serialized = JSON.stringify(state);
     if (serialized === lastSavedJsonRef.current) return;
 
@@ -417,7 +423,7 @@ export default function Home() {
     }, 900);
 
     return () => window.clearTimeout(timer);
-  }, [records, manualExpenses, simulation, lifePlan, fileName, monthKey, closedAt, historyReady, loadedMonthKey, hydrated, isDemo, router]);
+  }, [records, manualExpenses, simulation, lifePlan, fileName, amexTarget, monthKey, closedAt, historyReady, loadedMonthKey, hydrated, isDemo, router]);
 
   useEffect(() => {
     if (view !== "personal" || personalUnlocked || personalAccessChecked || personalCheckStartedRef.current) return;
@@ -517,6 +523,7 @@ export default function Home() {
     [manualExpenses],
   );
   const settlementTotal = amexAmount + manualAmount;
+  const targetProgress = amexTargetRemaining(amexTarget, amexAmount);
   const perPersonSettlement = Math.round(settlementTotal / 2);
   const includedCount = records.filter((record) => record.included).length;
   const excludedCount = records.filter((record) => !record.included).length;
@@ -653,7 +660,7 @@ export default function Home() {
   const closeMonth = () => {
     if (closedAt || importing) return;
     if (!window.confirm(`${formatMonthLabel(monthKey)}分として月次締めを実行しますか？`)) return;
-    const state: HouseholdState = { records, manualExpenses, simulation, lifePlan, fileName };
+    const state: HouseholdState = { records, manualExpenses, simulation, lifePlan, fileName, amexTarget };
     const closedAtValue = new Date().toISOString();
     setError(null);
     setIsClosing(true);
@@ -671,6 +678,7 @@ export default function Home() {
         setManualExpenses([]);
         setSimulation({ ...defaultSimulation, amexMonthly: 0 });
         setFileName("未取込");
+        setAmexTarget(null);
         setClosedAt(null);
         setIsDemo(false);
         setSyncStatus("saved");
@@ -871,6 +879,7 @@ export default function Home() {
       setSimulation(defaultSimulation);
       setLifePlan(createDefaultLifePlanInputs());
       setFileName("サンプル明細.xlsx");
+      setAmexTarget(null);
       setClosedAt(null);
       setIsDemo(true);
       setSyncStatus("saved");
@@ -943,6 +952,40 @@ export default function Home() {
                 <div className="total-breakdown">
                   <span>Amex（一人分） <b>{formatYen(Math.round(amexAmount / 2))}</b></span>
                   <span>手入力（一人分） <b>{formatYen(Math.round(manualAmount / 2))}</b></span>
+                </div>
+                <div className="amex-target">
+                  <label>
+                    今月の利用目標
+                    <div className="input-with-suffix">
+                      <input
+                        inputMode="numeric"
+                        value={amexTarget === null ? "" : String(amexTarget)}
+                        placeholder="未設定"
+                        disabled={Boolean(closedAt)}
+                        onChange={(event) => {
+                          const raw = event.target.value.replaceAll(",", "").replaceAll("円", "").trim();
+                          if (!raw) {
+                            setAmexTarget(null);
+                            setIsDemo(false);
+                            return;
+                          }
+                          if (!/^\d+$/.test(raw)) return;
+                          setAmexTarget(Number(raw));
+                          setIsDemo(false);
+                        }}
+                      />
+                      <span>円</span>
+                    </div>
+                  </label>
+                  {targetProgress.remaining === null ? (
+                    closedAt ? null : <p className="amex-target-empty">目標を入れると、精算対象のAmexに対する残りが分かります。</p>
+                  ) : (
+                    <p className={`amex-target-remaining${targetProgress.overBudget ? " over" : ""}`} aria-live="polite">
+                      {targetProgress.overBudget ? "超過" : "残り使える金額"}
+                      <b>{formatYen(targetProgress.remaining)}</b>
+                      <small>精算対象Amex {formatYen(amexAmount)} に対して</small>
+                    </p>
+                  )}
                 </div>
                 {!closedAt && (
                   <div className="day-filter">
@@ -1340,6 +1383,7 @@ function HistoryPanel({
   onSelect: (monthKey: string) => void;
 }) {
   const selected = entries.find((entry) => entry.monthKey === selectedMonth) ?? entries[0];
+  const targetProgress = selected ? amexTargetRemaining(selected.amexTarget, selected.amexAmount) : null;
 
   return (
     <section className="history-page" aria-labelledby="history-title">
@@ -1385,6 +1429,16 @@ function HistoryPanel({
               <div><span>Amex</span><strong>{formatYen(selected.amexAmount)}</strong></div>
               <div><span>その他費用</span><strong>{formatYen(selected.manualAmount)}</strong></div>
             </div>
+            {targetProgress && targetProgress.target !== null ? (
+              <p className={`history-target${targetProgress.overBudget ? " over" : ""}`}>
+                利用目標 {formatYen(targetProgress.target)}
+                <span>
+                  {targetProgress.overBudget
+                    ? `超過 ${formatYen(Math.abs(targetProgress.remaining ?? 0))}`
+                    : `残り ${formatYen(targetProgress.remaining ?? 0)}`}
+                </span>
+              </p>
+            ) : null}
 
             <div className="history-section">
               <div className="section-heading compact">

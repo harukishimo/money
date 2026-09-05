@@ -14,6 +14,7 @@ export interface HistoryEntry {
   excludedCount: number;
   records: AmexTransaction[];
   manualExpenses: ManualExpense[];
+  amexTarget: number | null;
 }
 
 function expenseCharge(expense: ManualExpense) {
@@ -41,5 +42,6 @@ export function buildHistoryEntry(envelope: StateEnvelope, state: HouseholdState
     excludedCount: records.filter((record) => !record.included).length,
     records,
     manualExpenses,
+    amexTarget: state.amexTarget,
   };
 }

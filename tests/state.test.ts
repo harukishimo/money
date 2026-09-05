@@ -53,6 +53,12 @@ test("household state validates persisted financial inputs", () => {
   assert.equal(parsed.lifePlan.people.length, 2);
   assert.equal(parseHouseholdState({ ...state, manualExpenses: [{ ...state.manualExpenses[0], shareRate: 101 }] }), null);
   assert.equal(parseHouseholdState({ ...state, lifePlan: { ...parsed.lifePlan, months: 601 } }), null);
+  assert.equal(parsed.amexTarget, null);
+  assert.equal(parseHouseholdState({ ...state, amexTarget: 30000 })?.amexTarget, 30000);
+  assert.equal(parseHouseholdState({ ...state, amexTarget: 0 })?.amexTarget, 0);
+  assert.equal(parseHouseholdState({ ...state, amexTarget: null })?.amexTarget, null);
+  assert.equal(parseHouseholdState({ ...state, amexTarget: -1 }), null);
+  assert.equal(parseHouseholdState({ ...state, amexTarget: 10.5 }), null);
 });
 
 test("sheet payload chunks round-trip in row order", () => {
@@ -116,4 +122,17 @@ test("history entry summarizes a closed monthly state", () => {
   assert.equal(entry.manualAmount, 60000);
   assert.equal(entry.total, 61200);
   assert.equal(entry.perPerson, 30600);
+  assert.equal(entry.amexTarget, null);
+
+  const withTarget = parseHouseholdState({ ...state, amexTarget: 5000 });
+  assert.ok(withTarget);
+  const targeted = buildHistoryEntry({
+    version: 2,
+    monthKey: "2026-08",
+    closedAt: "2026-08-15T00:00:00.000Z",
+    revision: "rev-1",
+    updatedAt: "2026-08-15T00:00:00.000Z",
+    state: withTarget,
+  }, withTarget);
+  assert.equal(targeted?.amexTarget, 5000);
 });

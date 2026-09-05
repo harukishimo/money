@@ -163,6 +163,14 @@ export function sumIncludedSettlementAmount(records: AmexTransaction[]) {
   return records.filter((record) => record.included).reduce((sum, record) => sum + record.amount, 0);
 }
 
+export function amexTargetRemaining(target: number | null | undefined, includedAmexAmount: number) {
+  if (target === null || target === undefined) {
+    return { target: null, remaining: null, overBudget: false };
+  }
+  const remaining = target - includedAmexAmount;
+  return { target, remaining, overBudget: remaining < 0 };
+}
+
 export function parseAmexRows(rows: unknown[][]): AmexTransaction[] {
   return rows.slice(7).flatMap((row, index) => {
     const rowNumber = index + 8;
