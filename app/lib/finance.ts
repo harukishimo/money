@@ -128,6 +128,37 @@ export function filterTransactionsByIsoDate(
   });
 }
 
+export function normalizeIsoDateRange(
+  start: unknown,
+  end: unknown = start,
+): { start: string; end: string } | null {
+  const startKey = toIsoDateKey(start);
+  const endKey = toIsoDateKey(end) ?? startKey;
+  if (!startKey && !endKey) return null;
+  const first = startKey ?? endKey as string;
+  const last = endKey ?? startKey as string;
+  return first <= last ? { start: first, end: last } : { start: last, end: first };
+}
+
+export function formatIsoDateSlash(isoDate: string) {
+  const key = toIsoDateKey(isoDate);
+  if (!key) return isoDate;
+  return key.replaceAll("-", "/");
+}
+
+export function filterTransactionsByIsoDateRange(
+  records: AmexTransaction[],
+  start: unknown,
+  end: unknown = start,
+): AmexTransaction[] {
+  const range = normalizeIsoDateRange(start, end);
+  if (!range) return records;
+  return records.filter((record) => {
+    const key = toIsoDateKey(record.date);
+    return key !== null && key >= range.start && key <= range.end;
+  });
+}
+
 export function sumIncludedSettlementAmount(records: AmexTransaction[]) {
   return records.filter((record) => record.included).reduce((sum, record) => sum + record.amount, 0);
 }

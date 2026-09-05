@@ -103,14 +103,40 @@ main { width: min(1420px, 100%); margin: 0 auto; padding: 0 4.5vw 80px; }
 .total-breakdown { display: flex; gap: 26px; margin-top: 20px; padding-top: 18px; border-top: 1px solid var(--line); font-size: 12px; color: var(--muted); }
 .total-breakdown b { display: block; color: var(--ink); margin-top: 4px; font-size: 16px; }
 .day-filter { margin-top: 20px; padding-top: 18px; border-top: 1px solid var(--line); }
-.day-filter-controls { display: flex; align-items: end; gap: 16px; }
-.day-filter-controls label { display: grid; gap: 6px; color: var(--muted); font-size: 11px; flex: 1; }
-.day-filter-controls input[type="date"] { max-width: 200px; }
-.day-filter-clear { border: 0; border-bottom: 1px solid var(--ink); background: transparent; padding: 0 0 5px; font-size: 12px; cursor: pointer; margin-bottom: 12px; }
+.day-filter-controls { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.day-filter-label { margin: 0; color: var(--muted); font-size: 11px; }
+.day-filter-clear { border: 0; border-bottom: 1px solid var(--ink); background: transparent; padding: 0 0 3px; font-size: 12px; cursor: pointer; }
 .day-filter-clear:disabled { color: var(--muted); border-bottom-color: var(--line); cursor: default; }
-.day-filter-chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0 0; padding: 0; list-style: none; }
-.day-filter-chips li { display: inline-flex; align-items: center; gap: 8px; border: 1px solid var(--line); background: var(--surface); padding: 5px 8px 5px 10px; font-size: 11px; }
-.day-filter-chips button { border: 0; background: transparent; color: var(--muted); cursor: pointer; padding: 0; font-size: 14px; line-height: 1; }
+.day-filter-range { margin: 8px 0 0; font-size: 13px; letter-spacing: .04em; }
+.range-calendar { margin-top: 12px; max-width: 320px; }
+.range-calendar-nav { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.range-calendar-nav strong { font-size: 13px; font-weight: 700; }
+.range-calendar-nav button { border: 0; background: transparent; cursor: pointer; font-size: 20px; line-height: 1; padding: 0 6px; color: var(--ink); }
+.range-calendar-weekdays, .range-calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); }
+.range-calendar-weekdays span { color: var(--muted); font-size: 10px; text-align: center; padding: 4px 0; }
+.range-day { position: relative; z-index: 0; border: 0; background: transparent; min-height: 36px; padding: 0; cursor: pointer; color: var(--ink); font-size: 12px; }
+.range-day.empty { cursor: default; }
+.range-day.sun { background: #f6e4e4; }
+.range-day.sat { background: #e4edf6; }
+.range-day.start::before, .range-day.end::before, .range-day.in::before {
+  content: "";
+  position: absolute;
+  top: 8px;
+  bottom: 8px;
+  left: 0;
+  right: 0;
+  background: #e4e1d8;
+  z-index: -1;
+}
+.range-day.start::before { left: 50%; }
+.range-day.end::before { right: 50%; }
+.range-day.single::before { display: none; }
+.range-day span { display: inline-grid; place-items: center; width: 28px; height: 28px; margin: 0 auto; }
+.range-day.start span, .range-day.end span, .range-day.single span {
+  border-radius: 50%;
+  background: var(--ink);
+  color: var(--surface);
+}
 .day-total { margin: 14px 0 0; color: var(--muted); font-size: 12px; }
 .day-total b { display: block; color: var(--ink); margin-top: 4px; font-size: 16px; }
 .day-total small { display: block; margin-top: 4px; font-size: 10px; }

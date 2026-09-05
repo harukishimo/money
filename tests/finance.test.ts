@@ -3,6 +3,8 @@ import test from "node:test";
 import {
   buildProjection,
   filterTransactionsByIsoDate,
+  filterTransactionsByIsoDateRange,
+  normalizeIsoDateRange,
   parseAmexRows,
   parseMoney,
   sumAmexStatementAmount,
@@ -97,6 +99,28 @@ test("day filter matches any selected day and sums included amounts once", () =>
   assert.deepEqual(selected.map((row) => row.description), ["FRESH MARKET", "BISTRO AO", "PERSONAL SHOP"]);
   assert.equal(sumIncludedSettlementAmount(selected), 18840);
   assert.equal(filterTransactionsByIsoDate(parsed, []).length, 4);
+});
+
+test("inclusive date range swaps reversed bounds and sums included amounts", () => {
+  const parsed = parseAmexRows([
+    ...meta,
+    ["2026/07/04", "", "FRESH MARKET", "CHIHARU SATO", "", 12640, "", null],
+    ["2026/07/08", "", "ETC 首都高速", "PRIMARY USER", "", 3840, "", null],
+    ["2026/07/12", "", "BISTRO AO", "CHIHARU SATO", "", 6800, "", 6200],
+    ["2026/07/12", "", "PERSONAL SHOP", "PRIMARY USER", "", 9200, "", null],
+  ]);
+  assert.deepEqual(normalizeIsoDateRange("2026-07-09", "2026-07-05"), { start: "2026-07-05", end: "2026-07-09" });
+  assert.deepEqual(normalizeIsoDateRange("2026-07-04", null), { start: "2026-07-04", end: "2026-07-04" });
+  assert.equal(normalizeIsoDateRange(null, null), null);
+
+  const mid = filterTransactionsByIsoDateRange(parsed, "2026-07-04", "2026-07-08");
+  assert.deepEqual(mid.map((row) => row.description), ["FRESH MARKET", "ETC 首都高速"]);
+  assert.equal(sumIncludedSettlementAmount(mid), 16480);
+
+  const swapped = filterTransactionsByIsoDateRange(parsed, "2026-07-12", "2026-07-04");
+  assert.equal(swapped.length, 4);
+  assert.equal(sumIncludedSettlementAmount(swapped), 22680);
+  assert.equal(filterTransactionsByIsoDateRange(parsed, null, null).length, 4);
 });
 
 test("projection applies scenario swing, growth and one-off expense", () => {

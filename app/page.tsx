@@ -7,12 +7,15 @@ import LifePlanPanel from "./life-plan-panel";
 import PersonalAssetsPanel from "./personal-assets-panel";
 import {
   buildProjection,
-  filterTransactionsByIsoDate,
+  filterTransactionsByIsoDateRange,
+  formatIsoDateSlash,
   formatYen,
+  normalizeIsoDateRange,
   parseAmexRows,
   parseCsv,
   sumAmexStatementAmount,
   sumIncludedSettlementAmount,
+  toIsoDateKey,
   type AmexTransaction,
   type SimulationInputs,
   type SimulationMode,
@@ -31,6 +34,7 @@ import {
   formatMonthLabel,
   nextMonthKey,
   parseHouseholdState,
+  previousMonthKey,
   type HouseholdState,
   type ManualCategory,
   type ManualExpense,
@@ -38,8 +42,9 @@ import {
 
 type View = "settlement" | "simulation" | "lifeplan" | "history" | "wishlist" | "personal";
 type SyncStatus = "loading" | "saved" | "saving" | "error";
+type DayRangeFilter = { monthKey: string; start: string; end: string | null };
 
-const EMPTY_DAY_FILTERS: string[] = [];
+const WEEKDAY_LABELS = ["日", "月", "火", "水", "木", "金", "土"];
 
 const STORAGE_KEY = "futari-settlement-v1";
 
@@ -257,8 +262,7 @@ export default function Home() {
   const [isClosing, setIsClosing] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [dayFilter, setDayFilter] = useState<{ monthKey: string; dates: string[] } | null>(null);
-  const [dayPickerNonce, setDayPickerNonce] = useState(0);
+  const [dayFilter, setDayFilter] = useState<DayRangeFilter | null>(null);
   const [manualForm, setManualForm] = useState({
     label: "",
     category: "other" as ManualCategory,
@@ -491,18 +495,21 @@ export default function Home() {
     };
   }, [view, personalUnlocked, personalAccessChecked, personalLoadedMonthKey, personalMonthKey, router]);
 
-  const activeDayFilters = !closedAt && dayFilter?.monthKey === monthKey ? dayFilter.dates : EMPTY_DAY_FILTERS;
+  const activeRange = useMemo(() => {
+    if (closedAt || !dayFilter || dayFilter.monthKey !== monthKey) return null;
+    return normalizeIsoDateRange(dayFilter.start, dayFilter.end ?? dayFilter.start);
+  }, [closedAt, dayFilter, monthKey]);
   const amexAmount = useMemo(
     () => sumIncludedSettlementAmount(records),
     [records],
   );
   const visibleRecords = useMemo(
-    () => filterTransactionsByIsoDate(records, activeDayFilters),
-    [activeDayFilters, records],
+    () => filterTransactionsByIsoDateRange(records, activeRange?.start ?? null, activeRange?.end ?? null),
+    [activeRange, records],
   );
   const daySettlementAmount = useMemo(
-    () => (activeDayFilters.length > 0 ? sumIncludedSettlementAmount(visibleRecords) : 0),
-    [activeDayFilters, visibleRecords],
+    () => (activeRange ? sumIncludedSettlementAmount(visibleRecords) : 0),
+    [activeRange, visibleRecords],
   );
   const amexStatementAmount = useMemo(() => sumAmexStatementAmount(records), [records]);
   const manualAmount = useMemo(
@@ -940,35 +947,32 @@ export default function Home() {
                 {!closedAt && (
                   <div className="day-filter">
                     <div className="day-filter-controls">
-                      <label>日で絞り込む<input key={dayPickerNonce} type="date" onChange={(event) => {
-                        const next = event.target.value;
-                        if (!next) return;
-                        setDayFilter((current) => {
-                          const dates = current?.monthKey === monthKey ? current.dates : [];
-                          if (dates.includes(next)) return { monthKey, dates };
-                          return { monthKey, dates: [...dates, next] };
-                        });
-                        setDayPickerNonce((value) => value + 1);
-                      }} /></label>
-                      <button type="button" className="day-filter-clear" onClick={() => setDayFilter(null)} disabled={activeDayFilters.length === 0} aria-label="日付の絞り込みをすべてクリア">クリア</button>
+                      <p className="day-filter-label">期間で絞り込む</p>
+                      <button type="button" className="day-filter-clear" onClick={() => setDayFilter(null)} disabled={!dayFilter || dayFilter.monthKey !== monthKey} aria-label="期間の絞り込みをクリア">クリア</button>
                     </div>
-                    {activeDayFilters.length > 0 ? (
-                      <ul className="day-filter-chips" aria-label="選択した日">
-                        {activeDayFilters.map((date) => (
-                          <li key={date}>
-                            <span>{formatSelectedDayLabel(date)}</span>
-                            <button type="button" aria-label={`${formatSelectedDayLabel(date)}を外す`} onClick={() => setDayFilter((current) => {
-                              if (!current || current.monthKey !== monthKey) return current;
-                              const dates = current.dates.filter((item) => item !== date);
-                              return dates.length === 0 ? null : { monthKey, dates };
-                            })}>×</button>
-                          </li>
-                        ))}
-                      </ul>
-                    ) : null}
-                    {activeDayFilters.length > 0 ? (
+                    <p className="day-filter-range" aria-live="polite">
+                      {dayFilter && dayFilter.monthKey === monthKey
+                        ? `${formatIsoDateSlash(activeRange?.start ?? dayFilter.start)} 〜 ${dayFilter.end && activeRange ? formatIsoDateSlash(activeRange.end) : ""}`
+                        : "開始日と終了日を順に選ぶ"}
+                    </p>
+                    <DayRangeCalendar
+                      key={`${monthKey}-${fileName}`}
+                      fallbackMonth={monthKey}
+                      records={records}
+                      start={dayFilter?.monthKey === monthKey ? dayFilter.start : null}
+                      end={dayFilter?.monthKey === monthKey ? dayFilter.end : null}
+                      onSelect={(isoDate) => {
+                        setDayFilter((current) => {
+                          if (!current || current.monthKey !== monthKey || current.end !== null) {
+                            return { monthKey, start: isoDate, end: null };
+                          }
+                          return { monthKey, start: current.start, end: isoDate };
+                        });
+                      }}
+                    />
+                    {activeRange ? (
                       <p className="day-total" aria-live="polite">
-                        {activeDayFilters.length === 1 ? "この日のみ（精算対象）" : "選択日合計（精算対象）"}
+                        選択期間合計（精算対象）
                         <b>{formatYen(daySettlementAmount)}</b>
                         <small>一人分 {formatYen(Math.round(daySettlementAmount / 2))} · 月の合計は上のまま</small>
                       </p>
@@ -1042,8 +1046,8 @@ export default function Home() {
                     <tbody>
                       {records.length === 0 ? (
                         <tr><td colSpan={6} className="empty-cell">まだAmex明細がありません。</td></tr>
-                      ) : activeDayFilters.length > 0 && visibleRecords.length === 0 ? (
-                        <tr><td colSpan={6} className="empty-cell">選択した日の明細はありません。</td></tr>
+                      ) : activeRange && visibleRecords.length === 0 ? (
+                        <tr><td colSpan={6} className="empty-cell">選択した期間の明細はありません。</td></tr>
                       ) : visibleRecords.map((record) => (
                         <tr key={record.id} className={record.included ? "included-row" : "excluded-row"}>
                           <td>
@@ -1237,10 +1241,83 @@ function MoneyInput({ label, value, onChange }: { label: string; value: number; 
   );
 }
 
-function formatSelectedDayLabel(isoDate: string) {
-  const match = isoDate.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-  if (!match) return isoDate;
-  return `${Number(match[1])}年${Number(match[2])}月${Number(match[3])}日`;
+function calendarCells(monthKey: string) {
+  const [year, month] = monthKey.split("-").map(Number);
+  if (!year || !month) return [];
+  const firstWeekday = new Date(Date.UTC(year, month - 1, 1)).getUTCDay();
+  const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
+  const cells: (string | null)[] = Array.from({ length: firstWeekday }, () => null);
+  for (let day = 1; day <= daysInMonth; day += 1) {
+    cells.push(`${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`);
+  }
+  return cells;
+}
+
+function rangeTone(isoDate: string, start: string | null, end: string | null) {
+  const range = normalizeIsoDateRange(start, end);
+  if (!range || isoDate < range.start || isoDate > range.end) return "";
+  if (range.start === range.end) return "single";
+  if (isoDate === range.start) return "start";
+  if (isoDate === range.end) return "end";
+  return "in";
+}
+
+function DayRangeCalendar({
+  fallbackMonth,
+  records,
+  start,
+  end,
+  onSelect,
+}: {
+  fallbackMonth: string;
+  records: AmexTransaction[];
+  start: string | null;
+  end: string | null;
+  onSelect: (isoDate: string) => void;
+}) {
+  const initialMonth = useMemo(() => {
+    const keys = records.map((record) => toIsoDateKey(record.date)).filter((value): value is string => Boolean(value)).sort();
+    return keys[0]?.slice(0, 7) ?? fallbackMonth;
+  }, [fallbackMonth, records]);
+  const [viewMonth, setViewMonth] = useState(initialMonth);
+  const [hoverDate, setHoverDate] = useState<string | null>(null);
+  const highlightEnd = end ?? (start && !end ? hoverDate : null);
+  const cells = useMemo(() => calendarCells(viewMonth), [viewMonth]);
+
+  return (
+    <div className="range-calendar">
+      <div className="range-calendar-nav">
+        <button type="button" aria-label="前の月" onClick={() => setViewMonth((current) => previousMonthKey(current))}>‹</button>
+        <strong>{formatMonthLabel(viewMonth)}</strong>
+        <button type="button" aria-label="次の月" onClick={() => setViewMonth((current) => nextMonthKey(current))}>›</button>
+      </div>
+      <div className="range-calendar-weekdays" aria-hidden="true">
+        {WEEKDAY_LABELS.map((label) => <span key={label}>{label}</span>)}
+      </div>
+      <div className="range-calendar-grid" role="group" aria-label="期間カレンダー">
+        {cells.map((isoDate, index) => {
+          if (!isoDate) return <span key={`empty-${index}`} className="range-day empty" />;
+          const weekday = new Date(`${isoDate}T00:00:00Z`).getUTCDay();
+          const tone = rangeTone(isoDate, start, highlightEnd);
+          const dayNumber = Number(isoDate.slice(8));
+          return (
+            <button
+              key={isoDate}
+              type="button"
+              className={`range-day${weekday === 0 ? " sun" : ""}${weekday === 6 ? " sat" : ""}${tone ? ` ${tone}` : ""}`}
+              aria-label={`${formatIsoDateSlash(isoDate)}を${start && !end ? "終了日" : "開始日"}にする`}
+              aria-pressed={tone === "start" || tone === "end" || tone === "single"}
+              onMouseEnter={() => setHoverDate(isoDate)}
+              onMouseLeave={() => setHoverDate(null)}
+              onClick={() => onSelect(isoDate)}
+            >
+              <span>{dayNumber}</span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
 }
 
 function formatHistoryDate(value: string) {
