@@ -85,6 +85,20 @@ test("day filter keeps only matching Amex rows and sums included settlement amou
   assert.equal(filterTransactionsByIsoDate(parsed, "").length, 4);
 });
 
+test("day filter matches any selected day and sums included amounts once", () => {
+  const parsed = parseAmexRows([
+    ...meta,
+    ["2026/07/04", "", "FRESH MARKET", "CHIHARU SATO", "", 12640, "", null],
+    ["2026/07/08", "", "ETC 首都高速", "PRIMARY USER", "", 3840, "", null],
+    ["2026/07/12", "", "BISTRO AO", "CHIHARU SATO", "", 6800, "", 6200],
+    ["2026/07/12", "", "PERSONAL SHOP", "PRIMARY USER", "", 9200, "", null],
+  ]);
+  const selected = filterTransactionsByIsoDate(parsed, ["2026-07-04", "2026-07-12", "2026-07-12"]);
+  assert.deepEqual(selected.map((row) => row.description), ["FRESH MARKET", "BISTRO AO", "PERSONAL SHOP"]);
+  assert.equal(sumIncludedSettlementAmount(selected), 18840);
+  assert.equal(filterTransactionsByIsoDate(parsed, []).length, 4);
+});
+
 test("projection applies scenario swing, growth and one-off expense", () => {
   const base = {
     months: 12,

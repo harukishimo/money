@@ -114,10 +114,18 @@ export function toIsoDateKey(value: unknown): string | null {
 
 export function filterTransactionsByIsoDate(
   records: AmexTransaction[],
-  isoDate: string | null | undefined,
+  isoDate: string | readonly string[] | null | undefined,
 ): AmexTransaction[] {
-  if (!isoDate) return records;
-  return records.filter((record) => toIsoDateKey(record.date) === isoDate);
+  const selected = new Set(
+    (Array.isArray(isoDate) ? isoDate : isoDate ? [isoDate] : [])
+      .map((value) => toIsoDateKey(value))
+      .filter((value): value is string => Boolean(value)),
+  );
+  if (selected.size === 0) return records;
+  return records.filter((record) => {
+    const key = toIsoDateKey(record.date);
+    return key !== null && selected.has(key);
+  });
 }
 
 export function sumIncludedSettlementAmount(records: AmexTransaction[]) {

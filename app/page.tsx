@@ -39,6 +39,8 @@ import {
 type View = "settlement" | "simulation" | "lifeplan" | "history" | "wishlist" | "personal";
 type SyncStatus = "loading" | "saved" | "saving" | "error";
 
+const EMPTY_DAY_FILTERS: string[] = [];
+
 const STORAGE_KEY = "futari-settlement-v1";
 
 class AuthenticationRequiredError extends Error {}
@@ -255,7 +257,8 @@ export default function Home() {
   const [isClosing, setIsClosing] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [dayFilter, setDayFilter] = useState<{ monthKey: string; date: string } | null>(null);
+  const [dayFilter, setDayFilter] = useState<{ monthKey: string; dates: string[] } | null>(null);
+  const [dayPickerNonce, setDayPickerNonce] = useState(0);
   const [manualForm, setManualForm] = useState({
     label: "",
     category: "other" as ManualCategory,
@@ -488,18 +491,18 @@ export default function Home() {
     };
   }, [view, personalUnlocked, personalAccessChecked, personalLoadedMonthKey, personalMonthKey, router]);
 
-  const activeDayFilter = !closedAt && dayFilter?.monthKey === monthKey ? dayFilter.date : "";
+  const activeDayFilters = !closedAt && dayFilter?.monthKey === monthKey ? dayFilter.dates : EMPTY_DAY_FILTERS;
   const amexAmount = useMemo(
     () => sumIncludedSettlementAmount(records),
     [records],
   );
   const visibleRecords = useMemo(
-    () => filterTransactionsByIsoDate(records, activeDayFilter || null),
-    [activeDayFilter, records],
+    () => filterTransactionsByIsoDate(records, activeDayFilters),
+    [activeDayFilters, records],
   );
   const daySettlementAmount = useMemo(
-    () => (activeDayFilter ? sumIncludedSettlementAmount(visibleRecords) : 0),
-    [activeDayFilter, visibleRecords],
+    () => (activeDayFilters.length > 0 ? sumIncludedSettlementAmount(visibleRecords) : 0),
+    [activeDayFilters, visibleRecords],
   );
   const amexStatementAmount = useMemo(() => sumAmexStatementAmount(records), [records]);
   const manualAmount = useMemo(
@@ -937,12 +940,35 @@ export default function Home() {
                 {!closedAt && (
                   <div className="day-filter">
                     <div className="day-filter-controls">
-                      <label>日で絞り込む<input type="date" value={activeDayFilter} onChange={(event) => setDayFilter(event.target.value ? { monthKey, date: event.target.value } : null)} /></label>
-                      <button type="button" className="day-filter-clear" onClick={() => setDayFilter(null)} disabled={!activeDayFilter} aria-label="日付の絞り込みをクリア">クリア</button>
+                      <label>日で絞り込む<input key={dayPickerNonce} type="date" onChange={(event) => {
+                        const next = event.target.value;
+                        if (!next) return;
+                        setDayFilter((current) => {
+                          const dates = current?.monthKey === monthKey ? current.dates : [];
+                          if (dates.includes(next)) return { monthKey, dates };
+                          return { monthKey, dates: [...dates, next] };
+                        });
+                        setDayPickerNonce((value) => value + 1);
+                      }} /></label>
+                      <button type="button" className="day-filter-clear" onClick={() => setDayFilter(null)} disabled={activeDayFilters.length === 0} aria-label="日付の絞り込みをすべてクリア">クリア</button>
                     </div>
-                    {activeDayFilter ? (
+                    {activeDayFilters.length > 0 ? (
+                      <ul className="day-filter-chips" aria-label="選択した日">
+                        {activeDayFilters.map((date) => (
+                          <li key={date}>
+                            <span>{formatSelectedDayLabel(date)}</span>
+                            <button type="button" aria-label={`${formatSelectedDayLabel(date)}を外す`} onClick={() => setDayFilter((current) => {
+                              if (!current || current.monthKey !== monthKey) return current;
+                              const dates = current.dates.filter((item) => item !== date);
+                              return dates.length === 0 ? null : { monthKey, dates };
+                            })}>×</button>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : null}
+                    {activeDayFilters.length > 0 ? (
                       <p className="day-total" aria-live="polite">
-                        この日のみ（精算対象）
+                        {activeDayFilters.length === 1 ? "この日のみ（精算対象）" : "選択日合計（精算対象）"}
                         <b>{formatYen(daySettlementAmount)}</b>
                         <small>一人分 {formatYen(Math.round(daySettlementAmount / 2))} · 月の合計は上のまま</small>
                       </p>
@@ -1016,8 +1042,8 @@ export default function Home() {
                     <tbody>
                       {records.length === 0 ? (
                         <tr><td colSpan={6} className="empty-cell">まだAmex明細がありません。</td></tr>
-                      ) : activeDayFilter && visibleRecords.length === 0 ? (
-                        <tr><td colSpan={6} className="empty-cell">この日の明細はありません。</td></tr>
+                      ) : activeDayFilters.length > 0 && visibleRecords.length === 0 ? (
+                        <tr><td colSpan={6} className="empty-cell">選択した日の明細はありません。</td></tr>
                       ) : visibleRecords.map((record) => (
                         <tr key={record.id} className={record.included ? "included-row" : "excluded-row"}>
                           <td>
@@ -1209,6 +1235,12 @@ function MoneyInput({ label, value, onChange }: { label: string; value: number; 
   return (
     <label>{label}<div className="input-with-suffix"><input type="number" min="0" value={value} onChange={(event) => onChange(Math.max(0, Number(event.target.value) || 0))} /><span>円</span></div></label>
   );
+}
+
+function formatSelectedDayLabel(isoDate: string) {
+  const match = isoDate.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return isoDate;
+  return `${Number(match[1])}年${Number(match[2])}月${Number(match[3])}日`;
 }
 
 function formatHistoryDate(value: string) {

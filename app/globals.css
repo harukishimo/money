@@ -108,6 +108,9 @@ main { width: min(1420px, 100%); margin: 0 auto; padding: 0 4.5vw 80px; }
 .day-filter-controls input[type="date"] { max-width: 200px; }
 .day-filter-clear { border: 0; border-bottom: 1px solid var(--ink); background: transparent; padding: 0 0 5px; font-size: 12px; cursor: pointer; margin-bottom: 12px; }
 .day-filter-clear:disabled { color: var(--muted); border-bottom-color: var(--line); cursor: default; }
+.day-filter-chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0 0; padding: 0; list-style: none; }
+.day-filter-chips li { display: inline-flex; align-items: center; gap: 8px; border: 1px solid var(--line); background: var(--surface); padding: 5px 8px 5px 10px; font-size: 11px; }
+.day-filter-chips button { border: 0; background: transparent; color: var(--muted); cursor: pointer; padding: 0; font-size: 14px; line-height: 1; }
 .day-total { margin: 14px 0 0; color: var(--muted); font-size: 12px; }
 .day-total b { display: block; color: var(--ink); margin-top: 4px; font-size: 16px; }
 .day-total small { display: block; margin-top: 4px; font-size: 10px; }
