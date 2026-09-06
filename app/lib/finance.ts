@@ -233,6 +233,70 @@ export function parseAmexRows(rows: unknown[][]): AmexTransaction[] {
  * of cardholder, while the previous-month account transfer is only a history
  * line and must not be counted as a new expense.
  */
+export interface AmexUsageBreakdownItem {
+  key: string;
+  label: string;
+  amount: number;
+  /** Share of positive totals only; null when amount <= 0 or no positive base. */
+  percentage: number | null;
+  count: number;
+  inPie: boolean;
+}
+
+export interface AmexUsageBreakdown {
+  items: AmexUsageBreakdownItem[];
+  totalAmount: number;
+  positiveTotal: number;
+  excludedTransferCount: number;
+}
+
+/**
+ * Group imported Amex lines by description for the usage breakdown chart/list.
+ * Excludes previous-month transfer rows entirely. Other negatives (refunds) net
+ * into the merchant total.
+ */
+export function buildAmexUsageBreakdown(records: AmexTransaction[]): AmexUsageBreakdown {
+  let excludedTransferCount = 0;
+  const groups = new Map<string, { label: string; amount: number; count: number }>();
+
+  for (const record of records) {
+    if (record.reason === "transfer") {
+      excludedTransferCount += 1;
+      continue;
+    }
+    const label = normalize(record.description) || "（明細名なし）";
+    const key = normalizeForMatch(label);
+    const current = groups.get(key);
+    if (current) {
+      current.amount += record.amount;
+      current.count += 1;
+    } else {
+      groups.set(key, { label, amount: record.amount, count: 1 });
+    }
+  }
+
+  const raw = [...groups.values()].sort((left, right) => {
+    if (right.amount !== left.amount) return right.amount - left.amount;
+    return left.label.localeCompare(right.label, "ja");
+  });
+  const positiveTotal = raw.filter((item) => item.amount > 0).reduce((sum, item) => sum + item.amount, 0);
+  const totalAmount = raw.reduce((sum, item) => sum + item.amount, 0);
+  const items: AmexUsageBreakdownItem[] = raw.map((item) => {
+    const inPie = item.amount > 0 && positiveTotal > 0;
+    const percentage = inPie ? Math.round((item.amount / positiveTotal) * 1000) / 10 : null;
+    return {
+      key: normalizeForMatch(item.label),
+      label: item.label,
+      amount: item.amount,
+      percentage,
+      count: item.count,
+      inPie,
+    };
+  });
+
+  return { items, totalAmount, positiveTotal, excludedTransferCount };
+}
+
 export function sumAmexStatementAmount(records: AmexTransaction[]) {
   return records
     .filter((record) => record.reason !== "transfer" && !record.locked)

@@ -7,6 +7,7 @@ import LifePlanPanel from "./life-plan-panel";
 import PersonalAssetsPanel from "./personal-assets-panel";
 import {
   amexTargetRemaining,
+  buildAmexUsageBreakdown,
   buildProjection,
   filterTransactionsByIsoDateRange,
   formatIsoDateSlash,
@@ -18,6 +19,7 @@ import {
   sumIncludedSettlementAmount,
   toIsoDateKey,
   type AmexTransaction,
+  type AmexUsageBreakdown,
   type SimulationInputs,
   type SimulationMode,
 } from "./lib/finance";
@@ -516,6 +518,10 @@ export default function Home() {
   const daySettlementAmount = useMemo(
     () => (activeRange ? sumIncludedSettlementAmount(visibleRecords) : 0),
     [activeRange, visibleRecords],
+  );
+  const usageBreakdown = useMemo(
+    () => buildAmexUsageBreakdown(visibleRecords),
+    [visibleRecords],
   );
   const amexStatementAmount = useMemo(() => sumAmexStatementAmount(records), [records]);
   const manualAmount = useMemo(
@@ -1118,6 +1124,8 @@ export default function Home() {
                     </tbody>
                   </table>
                 </div>
+
+                <AmexUsageBreakdownSection breakdown={usageBreakdown} ranged={Boolean(activeRange)} />
               </div>
 
               <aside className="side-column">
@@ -1304,6 +1312,112 @@ function rangeTone(isoDate: string, start: string | null, end: string | null) {
   if (isoDate === range.end) return "end";
   return "in";
 }
+
+
+const BREAKDOWN_COLORS = ["#2f7364", "#e7643f", "#e4bd64", "#4a6fa5", "#9c3a32", "#6e746f", "#b8d9cc", "#8b5a2b"];
+
+function AmexUsageBreakdownSection({
+  breakdown,
+  ranged,
+}: {
+  breakdown: AmexUsageBreakdown;
+  ranged: boolean;
+}) {
+  const pieItems = breakdown.items.filter((item) => item.inPie);
+  const slices = pieItems.reduce<
+    Array<(typeof pieItems)[number] & { start: number; sweep: number; color: string }>
+  >((acc, item, index) => {
+    const share = breakdown.positiveTotal > 0 ? item.amount / breakdown.positiveTotal : 0;
+    const sweep = share * 360;
+    const start = acc.length === 0 ? -90 : acc[acc.length - 1].start + acc[acc.length - 1].sweep;
+    acc.push({
+      ...item,
+      start,
+      sweep,
+      color: BREAKDOWN_COLORS[index % BREAKDOWN_COLORS.length],
+    });
+    return acc;
+  }, []);
+
+  return (
+    <div className="usage-breakdown">
+      <div className="section-heading compact">
+        <div>
+          <p className="section-number">01b</p>
+          <h2>利用内訳</h2>
+        </div>
+        <span className="file-name">{ranged ? "選択期間の明細" : "取込明細すべて"}</span>
+      </div>
+      <p className="usage-breakdown-note">
+        利用内容ごとに合算しています。「前回分口座振替」は除外し、返金は差し引きます。
+        {breakdown.excludedTransferCount > 0 ? `（振替除外 ${breakdown.excludedTransferCount}件）` : ""}
+      </p>
+      {breakdown.items.length === 0 ? (
+        <p className="empty-note">表示できる利用内訳がありません。</p>
+      ) : (
+        <div className="usage-breakdown-grid">
+          <div className="usage-pie-panel" aria-hidden={pieItems.length === 0}>
+            {pieItems.length === 0 ? (
+              <p className="empty-note">円グラフ用のプラス金額がありません。</p>
+            ) : (
+              <svg className="usage-pie" viewBox="0 0 120 120" role="img" aria-label="利用内訳の円グラフ">
+                {slices.map((slice) => (
+                  <path
+                    key={slice.key}
+                    d={describeDonutSlice(60, 60, 52, 28, slice.start, slice.sweep)}
+                    fill={slice.color}
+                  />
+                ))}
+                <circle cx="60" cy="60" r="26" fill="var(--surface)" />
+                <text x="60" y="58" textAnchor="middle" className="usage-pie-center-label">合計</text>
+                <text x="60" y="72" textAnchor="middle" className="usage-pie-center-value">{formatYen(breakdown.positiveTotal)}</text>
+              </svg>
+            )}
+          </div>
+          <div className="usage-breakdown-list">
+            {breakdown.items.map((item) => {
+              const sliceIndex = slices.findIndex((slice) => slice.key === item.key);
+              const color = sliceIndex >= 0 ? slices[sliceIndex].color : "#cfc9bb";
+              return (
+                <div className="usage-breakdown-row" key={item.key}>
+                  <span className="usage-swatch" style={{ background: color }} aria-hidden="true" />
+                  <div className="usage-breakdown-meta">
+                    <strong>{item.label}</strong>
+                    <small>{item.count}件{item.percentage !== null ? ` · ${item.percentage}%` : " · 円グラフ対象外"}</small>
+                  </div>
+                  <strong className={`usage-breakdown-amount ${item.amount < 0 ? "negative" : ""}`}>{formatYen(item.amount)}</strong>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function describeDonutSlice(cx: number, cy: number, outer: number, inner: number, startAngle: number, sweep: number) {
+  if (sweep <= 0) return "";
+  const clamped = Math.min(sweep, 359.999);
+  const start = polar(cx, cy, outer, startAngle);
+  const end = polar(cx, cy, outer, startAngle + clamped);
+  const startInner = polar(cx, cy, inner, startAngle + clamped);
+  const endInner = polar(cx, cy, inner, startAngle);
+  const large = clamped > 180 ? 1 : 0;
+  return [
+    `M ${start.x} ${start.y}`,
+    `A ${outer} ${outer} 0 ${large} 1 ${end.x} ${end.y}`,
+    `L ${startInner.x} ${startInner.y}`,
+    `A ${inner} ${inner} 0 ${large} 0 ${endInner.x} ${endInner.y}`,
+    "Z",
+  ].join(" ");
+}
+
+function polar(cx: number, cy: number, radius: number, angle: number) {
+  const rad = (angle * Math.PI) / 180;
+  return { x: cx + radius * Math.cos(rad), y: cy + radius * Math.sin(rad) };
+}
+
 
 function DayRangeCalendar({
   fallbackMonth,

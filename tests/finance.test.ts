@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   amexTargetRemaining,
+  buildAmexUsageBreakdown,
   buildProjection,
   filterTransactionsByIsoDate,
   filterTransactionsByIsoDateRange,
@@ -150,4 +151,55 @@ test("projection applies scenario swing, growth and one-off expense", () => {
   assert.equal(lean[0].total, 71000);
   assert.equal(buffered[0].total, 79000);
   assert.equal(lean[1].oneOff, 100000);
+});
+
+test("usage breakdown groups by description, excludes transfers, nets refunds", () => {
+  const parsed = parseAmexRows([
+    ...meta,
+    ["2026/08/01", "", "SHOP A", "CHIHARU SATO", "", 1000, "", null],
+    ["2026/08/02", "", "SHOP A", "OTHER USER", "", 500, "", null],
+    ["2026/08/03", "", "CAFE", "CHIHARU SATO", "", 800, "", null],
+    ["2026/08/04", "", "CAFE", "CHIHARU SATO", "", -200, "", null],
+    ["2026/08/05", "", "前回分口座振替金額", "CHIHARU SATO", "", 99000, "", null],
+    ["2026/08/06", "", "前回分講座振替金額", "OTHER USER", "", 12000, "", null],
+  ]);
+  const breakdown = buildAmexUsageBreakdown(parsed);
+  assert.equal(breakdown.excludedTransferCount, 2);
+  assert.equal(breakdown.items.length, 2);
+  assert.equal(breakdown.items[0].label, "SHOP A");
+  assert.equal(breakdown.items[0].amount, 1500);
+  assert.equal(breakdown.items[0].percentage, 71.4);
+  assert.equal(breakdown.items[1].label, "CAFE");
+  assert.equal(breakdown.items[1].amount, 600);
+  assert.equal(breakdown.items[1].percentage, 28.6);
+  assert.equal(breakdown.positiveTotal, 2100);
+  assert.equal(breakdown.totalAmount, 2100);
+});
+
+test("usage breakdown omits non-positive groups from pie percentages", () => {
+  const parsed = parseAmexRows([
+    ...meta,
+    ["2026/08/01", "", "SHOP", "CHIHARU SATO", "", 1000, "", null],
+    ["2026/08/02", "", "REFUND ONLY", "CHIHARU SATO", "", -300, "", null],
+  ]);
+  const breakdown = buildAmexUsageBreakdown(parsed);
+  const refund = breakdown.items.find((item) => item.label === "REFUND ONLY");
+  assert.ok(refund);
+  assert.equal(refund.amount, -300);
+  assert.equal(refund.inPie, false);
+  assert.equal(refund.percentage, null);
+  assert.equal(breakdown.items[0].percentage, 100);
+});
+
+test("usage breakdown respects pre-filtered date ranges", () => {
+  const parsed = parseAmexRows([
+    ...meta,
+    ["2026/08/01", "", "SHOP", "CHIHARU SATO", "", 1000, "", null],
+    ["2026/08/10", "", "CAFE", "CHIHARU SATO", "", 400, "", null],
+  ]);
+  const ranged = filterTransactionsByIsoDateRange(parsed, "2026-08-01", "2026-08-05");
+  const breakdown = buildAmexUsageBreakdown(ranged);
+  assert.equal(breakdown.items.length, 1);
+  assert.equal(breakdown.items[0].label, "SHOP");
+  assert.equal(breakdown.items[0].amount, 1000);
 });
