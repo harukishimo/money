@@ -1124,8 +1124,6 @@ export default function Home() {
                     </tbody>
                   </table>
                 </div>
-
-                <AmexUsageBreakdownSection breakdown={usageBreakdown} ranged={Boolean(activeRange)} />
               </div>
 
               <aside className="side-column">
@@ -1158,6 +1156,8 @@ export default function Home() {
                 </div>
               </aside>
             </section>
+
+            <AmexUsageBreakdownSection breakdown={usageBreakdown} ranged={Boolean(activeRange)} />
           </>
         ) : view === "simulation" ? (
           <section className="simulation-page" aria-labelledby="simulation-title">
@@ -1327,7 +1327,7 @@ function AmexUsageBreakdownSection({
     <div className="usage-breakdown">
       <div className="section-heading compact">
         <div>
-          <p className="section-number">01b</p>
+          <p className="section-number">03</p>
           <h2>利用内訳</h2>
         </div>
         <span className="file-name">{ranged ? "選択期間の明細" : "取込明細すべて"}</span>

@@ -661,8 +661,8 @@ footer button { border: 0; border-bottom: 1px solid var(--muted); background: tr
 
 
 .usage-breakdown {
-  margin-top: 28px;
-  padding-top: 22px;
+  margin-top: 36px;
+  padding: 22px 0 0;
   border-top: 1px solid var(--line);
 }
 .usage-breakdown-note {
