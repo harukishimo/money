@@ -766,3 +766,20 @@ footer button { border: 0; border-bottom: 1px solid var(--muted); background: tr
   margin-top: 2px;
   font-size: 16px;
 }
+
+.section-jump-button {
+  margin-top: 16px;
+  border: 1px solid var(--ink);
+  background: transparent;
+  color: var(--ink);
+  padding: 10px 14px;
+  font-size: 13px;
+  cursor: pointer;
+}
+.section-jump-button:hover {
+  background: var(--ink);
+  color: var(--surface);
+}
+.usage-breakdown {
+  scroll-margin-top: 96px;
+}

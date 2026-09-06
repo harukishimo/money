@@ -950,6 +950,15 @@ export default function Home() {
                 <p className="eyebrow">{formatMonthLabel(monthKey)} / MONTHLY SETTLEMENT</p>
                 <h1 id="settlement-title">{formatMonthLabel(monthKey)}、ふたりで<br />精算する金額。</h1>
                 <p className="hero-description">Amex明細と手入力の費用を、決めたルールでひとつの金額にまとめます。</p>
+                <button
+                  type="button"
+                  className="section-jump-button"
+                  onClick={() => {
+                    document.getElementById("usage-breakdown")?.scrollIntoView({ behavior: "smooth", block: "start" });
+                  }}
+                >
+                  03 利用内訳へ移動
+                </button>
               </div>
               <div className="total-panel">
                 <p className="total-label">一人あたりの請求予定額</p>
@@ -1324,7 +1333,7 @@ function AmexUsageBreakdownSection({
   ranged: boolean;
 }) {
   return (
-    <div className="usage-breakdown">
+    <div className="usage-breakdown" id="usage-breakdown">
       <div className="section-heading compact">
         <div>
           <p className="section-number">03</p>
