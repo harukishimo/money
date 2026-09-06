@@ -1323,11 +1323,42 @@ function AmexUsageBreakdownSection({
   breakdown: AmexUsageBreakdown;
   ranged: boolean;
 }) {
-  const pieItems = breakdown.items.filter((item) => item.inPie);
+  return (
+    <div className="usage-breakdown">
+      <div className="section-heading compact">
+        <div>
+          <p className="section-number">01b</p>
+          <h2>利用内訳</h2>
+        </div>
+        <span className="file-name">{ranged ? "選択期間の明細" : "取込明細すべて"}</span>
+      </div>
+      <p className="usage-breakdown-note">
+        カード会員ごとに分けたうえで、利用内容を合算しています。「前回分口座振替」は除外し、返金は差し引きます。
+        {breakdown.excludedTransferCount > 0 ? `（振替除外 ${breakdown.excludedTransferCount}件）` : ""}
+      </p>
+      {breakdown.cardholders.length === 0 ? (
+        <p className="empty-note">表示できる利用内訳がありません。</p>
+      ) : (
+        <div className="usage-breakdown-groups">
+          {breakdown.cardholders.map((cardholder) => (
+            <AmexUsageCardholderBreakdown key={cardholder.key} cardholder={cardholder} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function AmexUsageCardholderBreakdown({
+  cardholder,
+}: {
+  cardholder: AmexUsageBreakdown["cardholders"][number];
+}) {
+  const pieItems = cardholder.items.filter((item) => item.inPie);
   const slices = pieItems.reduce<
     Array<(typeof pieItems)[number] & { start: number; sweep: number; color: string }>
   >((acc, item, index) => {
-    const share = breakdown.positiveTotal > 0 ? item.amount / breakdown.positiveTotal : 0;
+    const share = cardholder.positiveTotal > 0 ? item.amount / cardholder.positiveTotal : 0;
     const sweep = share * 360;
     const start = acc.length === 0 ? -90 : acc[acc.length - 1].start + acc[acc.length - 1].sweep;
     acc.push({
@@ -1340,59 +1371,54 @@ function AmexUsageBreakdownSection({
   }, []);
 
   return (
-    <div className="usage-breakdown">
-      <div className="section-heading compact">
+    <section className="usage-cardholder">
+      <div className="usage-cardholder-heading">
         <div>
-          <p className="section-number">01b</p>
-          <h2>利用内訳</h2>
+          <p className="eyebrow">CARD MEMBER</p>
+          <h3>{cardholder.label}</h3>
         </div>
-        <span className="file-name">{ranged ? "選択期間の明細" : "取込明細すべて"}</span>
+        <div className="usage-cardholder-total">
+          <span>{cardholder.count}件</span>
+          <strong>{formatYen(cardholder.amount)}</strong>
+        </div>
       </div>
-      <p className="usage-breakdown-note">
-        利用内容ごとに合算しています。「前回分口座振替」は除外し、返金は差し引きます。
-        {breakdown.excludedTransferCount > 0 ? `（振替除外 ${breakdown.excludedTransferCount}件）` : ""}
-      </p>
-      {breakdown.items.length === 0 ? (
-        <p className="empty-note">表示できる利用内訳がありません。</p>
-      ) : (
-        <div className="usage-breakdown-grid">
-          <div className="usage-pie-panel" aria-hidden={pieItems.length === 0}>
-            {pieItems.length === 0 ? (
-              <p className="empty-note">円グラフ用のプラス金額がありません。</p>
-            ) : (
-              <svg className="usage-pie" viewBox="0 0 120 120" role="img" aria-label="利用内訳の円グラフ">
-                {slices.map((slice) => (
-                  <path
-                    key={slice.key}
-                    d={describeDonutSlice(60, 60, 52, 28, slice.start, slice.sweep)}
-                    fill={slice.color}
-                  />
-                ))}
-                <circle cx="60" cy="60" r="26" fill="var(--surface)" />
-                <text x="60" y="58" textAnchor="middle" className="usage-pie-center-label">合計</text>
-                <text x="60" y="72" textAnchor="middle" className="usage-pie-center-value">{formatYen(breakdown.positiveTotal)}</text>
-              </svg>
-            )}
-          </div>
-          <div className="usage-breakdown-list">
-            {breakdown.items.map((item) => {
-              const sliceIndex = slices.findIndex((slice) => slice.key === item.key);
-              const color = sliceIndex >= 0 ? slices[sliceIndex].color : "#cfc9bb";
-              return (
-                <div className="usage-breakdown-row" key={item.key}>
-                  <span className="usage-swatch" style={{ background: color }} aria-hidden="true" />
-                  <div className="usage-breakdown-meta">
-                    <strong>{item.label}</strong>
-                    <small>{item.count}件{item.percentage !== null ? ` · ${item.percentage}%` : " · 円グラフ対象外"}</small>
-                  </div>
-                  <strong className={`usage-breakdown-amount ${item.amount < 0 ? "negative" : ""}`}>{formatYen(item.amount)}</strong>
-                </div>
-              );
-            })}
-          </div>
+      <div className="usage-breakdown-grid">
+        <div className="usage-pie-panel" aria-hidden={pieItems.length === 0}>
+          {pieItems.length === 0 ? (
+            <p className="empty-note">円グラフ用のプラス金額がありません。</p>
+          ) : (
+            <svg className="usage-pie" viewBox="0 0 120 120" role="img" aria-label={`${cardholder.label}の利用内訳円グラフ`}>
+              {slices.map((slice) => (
+                <path
+                  key={slice.key}
+                  d={describeDonutSlice(60, 60, 52, 28, slice.start, slice.sweep)}
+                  fill={slice.color}
+                />
+              ))}
+              <circle cx="60" cy="60" r="26" fill="var(--surface)" />
+              <text x="60" y="58" textAnchor="middle" className="usage-pie-center-label">合計</text>
+              <text x="60" y="72" textAnchor="middle" className="usage-pie-center-value">{formatYen(cardholder.positiveTotal)}</text>
+            </svg>
+          )}
         </div>
-      )}
-    </div>
+        <div className="usage-breakdown-list">
+          {cardholder.items.map((item) => {
+            const sliceIndex = slices.findIndex((slice) => slice.key === item.key);
+            const color = sliceIndex >= 0 ? slices[sliceIndex].color : "#cfc9bb";
+            return (
+              <div className="usage-breakdown-row" key={item.key}>
+                <span className="usage-swatch" style={{ background: color }} aria-hidden="true" />
+                <div className="usage-breakdown-meta">
+                  <strong>{item.label}</strong>
+                  <small>{item.count}件{item.percentage !== null ? ` · ${item.percentage}%` : " · 円グラフ対象外"}</small>
+                </div>
+                <strong className={`usage-breakdown-amount ${item.amount < 0 ? "negative" : ""}`}>{formatYen(item.amount)}</strong>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </section>
   );
 }
 

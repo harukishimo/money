@@ -237,44 +237,31 @@ export interface AmexUsageBreakdownItem {
   key: string;
   label: string;
   amount: number;
-  /** Share of positive totals only; null when amount <= 0 or no positive base. */
+  /** Share of this cardholder's positive totals only; null when amount <= 0. */
   percentage: number | null;
   count: number;
   inPie: boolean;
 }
 
-export interface AmexUsageBreakdown {
+export interface AmexUsageBreakdownCardholder {
+  key: string;
+  label: string;
+  amount: number;
+  positiveTotal: number;
+  count: number;
   items: AmexUsageBreakdownItem[];
+}
+
+export interface AmexUsageBreakdown {
+  cardholders: AmexUsageBreakdownCardholder[];
   totalAmount: number;
   positiveTotal: number;
   excludedTransferCount: number;
 }
 
-/**
- * Group imported Amex lines by description for the usage breakdown chart/list.
- * Excludes previous-month transfer rows entirely. Other negatives (refunds) net
- * into the merchant total.
- */
-export function buildAmexUsageBreakdown(records: AmexTransaction[]): AmexUsageBreakdown {
-  let excludedTransferCount = 0;
-  const groups = new Map<string, { label: string; amount: number; count: number }>();
-
-  for (const record of records) {
-    if (record.reason === "transfer") {
-      excludedTransferCount += 1;
-      continue;
-    }
-    const label = normalize(record.description) || "（明細名なし）";
-    const key = normalizeForMatch(label);
-    const current = groups.get(key);
-    if (current) {
-      current.amount += record.amount;
-      current.count += 1;
-    } else {
-      groups.set(key, { label, amount: record.amount, count: 1 });
-    }
-  }
-
+function finalizeBreakdownItems(
+  groups: Map<string, { label: string; amount: number; count: number }>,
+): { items: AmexUsageBreakdownItem[]; positiveTotal: number; totalAmount: number } {
   const raw = [...groups.values()].sort((left, right) => {
     if (right.amount !== left.amount) return right.amount - left.amount;
     return left.label.localeCompare(right.label, "ja");
@@ -293,8 +280,64 @@ export function buildAmexUsageBreakdown(records: AmexTransaction[]): AmexUsageBr
       inPie,
     };
   });
+  return { items, positiveTotal, totalAmount };
+}
 
-  return { items, totalAmount, positiveTotal, excludedTransferCount };
+/**
+ * Categorize by cardholder first, then group by description within each member.
+ * Excludes previous-month transfer rows. Other negatives (refunds) net into totals.
+ */
+export function buildAmexUsageBreakdown(records: AmexTransaction[]): AmexUsageBreakdown {
+  let excludedTransferCount = 0;
+  const byCardholder = new Map<string, {
+    label: string;
+    merchants: Map<string, { label: string; amount: number; count: number }>;
+  }>();
+
+  for (const record of records) {
+    if (record.reason === "transfer") {
+      excludedTransferCount += 1;
+      continue;
+    }
+    const cardholderLabel = normalize(record.cardholder) || "（会員名なし）";
+    const cardholderKey = normalizeForMatch(cardholderLabel);
+    let bucket = byCardholder.get(cardholderKey);
+    if (!bucket) {
+      bucket = { label: cardholderLabel, merchants: new Map() };
+      byCardholder.set(cardholderKey, bucket);
+    }
+    const merchantLabel = normalize(record.description) || "（明細名なし）";
+    const merchantKey = normalizeForMatch(merchantLabel);
+    const current = bucket.merchants.get(merchantKey);
+    if (current) {
+      current.amount += record.amount;
+      current.count += 1;
+    } else {
+      bucket.merchants.set(merchantKey, { label: merchantLabel, amount: record.amount, count: 1 });
+    }
+  }
+
+  const cardholders: AmexUsageBreakdownCardholder[] = [...byCardholder.entries()]
+    .map(([key, bucket]) => {
+      const finalized = finalizeBreakdownItems(bucket.merchants);
+      const count = finalized.items.reduce((sum, item) => sum + item.count, 0);
+      return {
+        key,
+        label: bucket.label,
+        amount: finalized.totalAmount,
+        positiveTotal: finalized.positiveTotal,
+        count,
+        items: finalized.items,
+      };
+    })
+    .sort((left, right) => {
+      if (right.amount !== left.amount) return right.amount - left.amount;
+      return left.label.localeCompare(right.label, "ja");
+    });
+
+  const totalAmount = cardholders.reduce((sum, item) => sum + item.amount, 0);
+  const positiveTotal = cardholders.reduce((sum, item) => sum + item.positiveTotal, 0);
+  return { cardholders, totalAmount, positiveTotal, excludedTransferCount };
 }
 
 export function sumAmexStatementAmount(records: AmexTransaction[]) {
