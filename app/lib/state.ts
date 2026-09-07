@@ -66,6 +66,8 @@ export interface HouseholdState {
   lifePlan: LifePlanInputs;
   fileName: string;
   amexTarget: number | null;
+  /** ちゃむの負担割合（0〜100）。はるは 100 - chamShareRate。 */
+  chamShareRate: number;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -93,6 +95,12 @@ function parseAmexTarget(value: unknown): number | null | false {
   if (typeof value !== "number" || !Number.isInteger(value) || value < 0 || value > Number.MAX_SAFE_INTEGER) {
     return false;
   }
+  return value;
+}
+
+function parseChamShareRate(value: unknown): number | false {
+  if (value === undefined) return 50;
+  if (typeof value !== "number" || !Number.isFinite(value) || value < 0 || value > 100) return false;
   return value;
 }
 
@@ -160,6 +168,8 @@ export function parseHouseholdState(value: unknown): HouseholdState | null {
 
   const amexTarget = parseAmexTarget(value.amexTarget);
   if (amexTarget === false) return null;
+  const chamShareRate = parseChamShareRate(value.chamShareRate);
+  if (chamShareRate === false) return null;
 
   return {
     records: value.records,
@@ -168,5 +178,6 @@ export function parseHouseholdState(value: unknown): HouseholdState | null {
     lifePlan,
     fileName: value.fileName.slice(0, 255),
     amexTarget,
+    chamShareRate,
   };
 }

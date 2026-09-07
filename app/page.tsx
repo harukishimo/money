@@ -12,9 +12,11 @@ import {
   filterTransactionsByIsoDateRange,
   formatIsoDateSlash,
   formatYen,
+  MEMBER_NAMES,
   normalizeIsoDateRange,
   parseAmexRows,
   parseCsv,
+  splitSettlementByChamShare,
   sumAmexStatementAmount,
   sumIncludedSettlementAmount,
   toIsoDateKey,
@@ -116,6 +118,7 @@ function emptyHouseholdState(): HouseholdState {
     lifePlan: createDefaultLifePlanInputs(),
     fileName: "未取込",
     amexTarget: null,
+    chamShareRate: 50,
   };
 }
 
@@ -268,6 +271,7 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null);
   const [dayFilter, setDayFilter] = useState<DayRangeFilter | null>(null);
   const [amexTarget, setAmexTarget] = useState<number | null>(null);
+  const [chamShareRate, setChamShareRate] = useState(50);
   const [manualForm, setManualForm] = useState({
     label: "",
     category: "other" as ManualCategory,
@@ -339,6 +343,7 @@ export default function Home() {
           setLifePlan(remoteState.lifePlan);
           setFileName(remoteState.fileName || "保存済み明細");
           setAmexTarget(remoteState.amexTarget);
+          setChamShareRate(remoteState.chamShareRate);
           setIsDemo(false);
           setClosedAt(remote.closedAt ?? null);
           if (remote.source === "legacy") {
@@ -360,6 +365,7 @@ export default function Home() {
             setLifePlan(legacyState.lifePlan);
             setFileName(legacyState.fileName || "移行済み明細");
             setAmexTarget(legacyState.amexTarget);
+            setChamShareRate(legacyState.chamShareRate);
             setIsDemo(false);
             setClosedAt(null);
             revisionRef.current = null;
@@ -373,6 +379,7 @@ export default function Home() {
             setLifePlan(emptyState.lifePlan);
             setFileName(emptyState.fileName);
             setAmexTarget(emptyState.amexTarget);
+            setChamShareRate(emptyState.chamShareRate);
             setIsDemo(false);
             setClosedAt(null);
             revisionRef.current = null;
@@ -401,7 +408,7 @@ export default function Home() {
 
   useEffect(() => {
     if (!hydrated || !historyReady || loadedMonthKey !== monthKey || isDemo) return;
-    const state: HouseholdState = { records, manualExpenses, simulation, lifePlan, fileName, amexTarget };
+    const state: HouseholdState = { records, manualExpenses, simulation, lifePlan, fileName, amexTarget, chamShareRate };
     const serialized = JSON.stringify(state);
     if (serialized === lastSavedJsonRef.current) return;
 
@@ -425,7 +432,7 @@ export default function Home() {
     }, 900);
 
     return () => window.clearTimeout(timer);
-  }, [records, manualExpenses, simulation, lifePlan, fileName, amexTarget, monthKey, closedAt, historyReady, loadedMonthKey, hydrated, isDemo, router]);
+  }, [records, manualExpenses, simulation, lifePlan, fileName, amexTarget, chamShareRate, monthKey, closedAt, historyReady, loadedMonthKey, hydrated, isDemo, router]);
 
   useEffect(() => {
     if (view !== "personal" || personalUnlocked || personalAccessChecked || personalCheckStartedRef.current) return;
@@ -530,7 +537,10 @@ export default function Home() {
   );
   const settlementTotal = amexAmount + manualAmount;
   const targetProgress = amexTargetRemaining(amexTarget, amexAmount);
-  const perPersonSettlement = Math.round(settlementTotal / 2);
+  const settlementSplit = splitSettlementByChamShare(settlementTotal, chamShareRate);
+  const amexSplit = splitSettlementByChamShare(amexAmount, chamShareRate);
+  const manualSplit = splitSettlementByChamShare(manualAmount, chamShareRate);
+  const daySplit = splitSettlementByChamShare(daySettlementAmount, chamShareRate);
   const includedCount = records.filter((record) => record.included).length;
   const excludedCount = records.filter((record) => !record.included).length;
   const wishlistSummary = useMemo(() => summarizeWishlist(wishlist), [wishlist]);
@@ -538,7 +548,7 @@ export default function Home() {
     const summaries = new Map<string, PersonalMonthSummary>();
     summaries.set(monthKey, {
       monthKey,
-      claimAmount: perPersonSettlement,
+      claimAmount: settlementSplit.cham,
       amexStatementAmount,
       otherAmount: manualAmount,
     });
@@ -546,14 +556,14 @@ export default function Home() {
       if (!summaries.has(entry.monthKey)) {
         summaries.set(entry.monthKey, {
           monthKey: entry.monthKey,
-          claimAmount: entry.perPerson,
+          claimAmount: entry.chamAmount,
           amexStatementAmount: sumAmexStatementAmount(entry.records),
           otherAmount: entry.manualAmount,
         });
       }
     }
     return [...summaries.values()];
-  }, [amexStatementAmount, historyEntries, manualAmount, monthKey, perPersonSettlement]);
+  }, [amexStatementAmount, historyEntries, manualAmount, monthKey, settlementSplit.cham]);
 
   const selectedPersonalSummary = useMemo(
     () => personalMonthSummaries.find((summary) => summary.monthKey === personalMonthKey) ?? {
@@ -666,7 +676,7 @@ export default function Home() {
   const closeMonth = () => {
     if (closedAt || importing) return;
     if (!window.confirm(`${formatMonthLabel(monthKey)}分として月次締めを実行しますか？`)) return;
-    const state: HouseholdState = { records, manualExpenses, simulation, lifePlan, fileName, amexTarget };
+    const state: HouseholdState = { records, manualExpenses, simulation, lifePlan, fileName, amexTarget, chamShareRate };
     const closedAtValue = new Date().toISOString();
     setError(null);
     setIsClosing(true);
@@ -961,12 +971,58 @@ export default function Home() {
                 </button>
               </div>
               <div className="total-panel">
-                <p className="total-label">一人あたりの請求予定額</p>
-                <strong>{formatYen(perPersonSettlement)}</strong>
-                <p className="total-household">二人分合計 {formatYen(settlementTotal)}</p>
+                <p className="total-label">請求予定額（{MEMBER_NAMES.cham}）</p>
+                <strong>{formatYen(settlementSplit.cham)}</strong>
+                <p className="total-household">二人分合計 {formatYen(settlementTotal)} · {MEMBER_NAMES.haru} {formatYen(settlementSplit.haru)}</p>
+                <div className="share-ratio">
+                  <p className="share-ratio-label">負担比率</p>
+                  <div className="share-ratio-inputs">
+                    <label>
+                      {MEMBER_NAMES.haru}
+                      <div className="input-with-suffix">
+                        <input
+                          inputMode="decimal"
+                          value={String(settlementSplit.haruShareRate)}
+                          disabled={Boolean(closedAt)}
+                          onChange={(event) => {
+                            const raw = event.target.value.trim();
+                            if (!raw) return;
+                            const value = Number(raw);
+                            if (!Number.isFinite(value) || value < 0 || value > 100) return;
+                            setChamShareRate(100 - value);
+                            setIsDemo(false);
+                          }}
+                        />
+                        <span>%</span>
+                      </div>
+                    </label>
+                    <span className="share-ratio-colon">:</span>
+                    <label>
+                      {MEMBER_NAMES.cham}
+                      <div className="input-with-suffix">
+                        <input
+                          inputMode="decimal"
+                          value={String(settlementSplit.chamShareRate)}
+                          disabled={Boolean(closedAt)}
+                          onChange={(event) => {
+                            const raw = event.target.value.trim();
+                            if (!raw) return;
+                            const value = Number(raw);
+                            if (!Number.isFinite(value) || value < 0 || value > 100) return;
+                            setChamShareRate(value);
+                            setIsDemo(false);
+                          }}
+                        />
+                        <span>%</span>
+                      </div>
+                    </label>
+                  </div>
+                </div>
                 <div className="total-breakdown">
-                  <span>Amex（一人分） <b>{formatYen(Math.round(amexAmount / 2))}</b></span>
-                  <span>手入力（一人分） <b>{formatYen(Math.round(manualAmount / 2))}</b></span>
+                  <span>Amex（{MEMBER_NAMES.cham}） <b>{formatYen(amexSplit.cham)}</b></span>
+                  <span>手入力（{MEMBER_NAMES.cham}） <b>{formatYen(manualSplit.cham)}</b></span>
+                  <span>Amex（{MEMBER_NAMES.haru}） <b>{formatYen(amexSplit.haru)}</b></span>
+                  <span>手入力（{MEMBER_NAMES.haru}） <b>{formatYen(manualSplit.haru)}</b></span>
                 </div>
                 <div className="amex-target">
                   <label>
@@ -1032,7 +1088,7 @@ export default function Home() {
                       <p className="day-total" aria-live="polite">
                         選択期間合計（精算対象）
                         <b>{formatYen(daySettlementAmount)}</b>
-                        <small>一人分 {formatYen(Math.round(daySettlementAmount / 2))} · 月の合計は上のまま</small>
+                        <small>{MEMBER_NAMES.cham} {formatYen(daySplit.cham)} · {MEMBER_NAMES.haru} {formatYen(daySplit.haru)} · 月の合計は上のまま</small>
                       </p>
                     ) : null}
                   </div>
@@ -1541,7 +1597,7 @@ function HistoryPanel({
           <p className="eyebrow">MONTHLY HISTORY</p>
           <h1 id="history-title">締めた月を、<br />あとから確認する。</h1>
         </div>
-        <p>月次締めを完了した月だけを一覧表示しています。明細、その他の費用、二人分の合計、一人あたりの金額を確認できます。</p>
+        <p>月次締めを完了した月だけを一覧表示しています。明細、その他の費用、二人分の合計、はる／ちゃむの負担額を確認できます。</p>
       </div>
 
       {entries.length === 0 ? (
@@ -1558,7 +1614,7 @@ function HistoryPanel({
               >
                 <span>{formatMonthLabel(entry.monthKey)}</span>
                 <strong>{formatYen(entry.total)}</strong>
-                <small>一人あたり {formatYen(entry.perPerson)}</small>
+                <small>{MEMBER_NAMES.cham} {formatYen(entry.chamAmount)} · {MEMBER_NAMES.haru} {formatYen(entry.haruAmount)}</small>
               </button>
             ))}
           </aside>
@@ -1573,7 +1629,8 @@ function HistoryPanel({
             </div>
 
             <div className="history-kpis">
-              <div><span>一人あたり</span><strong>{formatYen(selected.perPerson)}</strong></div>
+              <div><span>{MEMBER_NAMES.cham}</span><strong>{formatYen(selected.chamAmount)}</strong></div>
+              <div><span>{MEMBER_NAMES.haru}</span><strong>{formatYen(selected.haruAmount)}</strong></div>
               <div><span>二人分合計</span><strong>{formatYen(selected.total)}</strong></div>
               <div><span>Amex</span><strong>{formatYen(selected.amexAmount)}</strong></div>
               <div><span>その他費用</span><strong>{formatYen(selected.manualAmount)}</strong></div>

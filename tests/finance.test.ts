@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   amexTargetRemaining,
+  splitSettlementByChamShare,
   buildAmexUsageBreakdown,
   buildProjection,
   filterTransactionsByIsoDate,
@@ -208,4 +209,12 @@ test("usage breakdown respects pre-filtered date ranges", () => {
   assert.equal(breakdown.cardholders[0].label, "CHIHARU SATO");
   assert.equal(breakdown.cardholders[0].items[0].label, "SHOP");
   assert.equal(breakdown.cardholders[0].items[0].amount, 1000);
+});
+
+test("settlement split rounds cham share and leaves remainder to haru", () => {
+  assert.deepEqual(splitSettlementByChamShare(1000, 50), { haru: 500, cham: 500, haruShareRate: 50, chamShareRate: 50 });
+  assert.deepEqual(splitSettlementByChamShare(1001, 50), { haru: 500, cham: 501, haruShareRate: 50, chamShareRate: 50 });
+  assert.deepEqual(splitSettlementByChamShare(10000, 40), { haru: 6000, cham: 4000, haruShareRate: 60, chamShareRate: 40 });
+  assert.deepEqual(splitSettlementByChamShare(100, 0), { haru: 100, cham: 0, haruShareRate: 100, chamShareRate: 0 });
+  assert.deepEqual(splitSettlementByChamShare(100, 100), { haru: 0, cham: 100, haruShareRate: 0, chamShareRate: 100 });
 });

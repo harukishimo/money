@@ -163,6 +163,19 @@ export function sumIncludedSettlementAmount(records: AmexTransaction[]) {
   return records.filter((record) => record.included).reduce((sum, record) => sum + record.amount, 0);
 }
 
+export const MEMBER_NAMES = {
+  haru: "はる",
+  cham: "ちゃむ",
+} as const;
+
+/** Split a household total using ちゃむ's share %. はる gets the remainder so both sum exactly. */
+export function splitSettlementByChamShare(total: number, chamShareRate: number) {
+  const rate = Math.min(100, Math.max(0, chamShareRate));
+  const cham = Math.round(total * (rate / 100));
+  const haru = Math.round(total) - cham;
+  return { haru, cham, haruShareRate: 100 - rate, chamShareRate: rate };
+}
+
 export function amexTargetRemaining(target: number | null | undefined, includedAmexAmount: number) {
   if (target === null || target === undefined) {
     return { target: null, remaining: null, overBudget: false };
