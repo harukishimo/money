@@ -17,7 +17,7 @@ import {
 
 const meta = Array.from({ length: 7 }, () => []);
 
-test("Amex rules include target name and ETC, exclude previous transfer, and prefer H", () => {
+test("Amex rules include target name and ETC, exclude previous transfer, and prefer billed yen in F", () => {
   const rows = [
     ...meta,
     ["2026/08/01", "", "SHOP", "CHIHARU SATO", "", 1000, "", null],
@@ -28,16 +28,37 @@ test("Amex rules include target name and ETC, exclude previous transfer, and pre
   ];
   const parsed = parseAmexRows(rows);
   assert.equal(parsed.length, 5);
-  assert.equal(parsed.filter((row) => row.included).reduce((sum, row) => sum + row.amount, 0), 2300);
-  assert.equal(parsed[1].amountSource, "H");
+  assert.equal(parsed.filter((row) => row.included).reduce((sum, row) => sum + row.amount, 0), 2500);
+  assert.equal(parsed[1].amount, 1000);
+  assert.equal(parsed[1].amountSource, "F");
   assert.equal(parsed[2].locked, true);
   assert.equal(parsed[3].reason, "etc");
 });
 
-test("H column zero is still preferred over F", () => {
+test("billed yen in F is used even when H is zero", () => {
   const parsed = parseAmexRows([...meta, ["", "", "SHOP", "CHIHARU SATO", "", 1200, "", 0]]);
-  assert.equal(parsed[0].amount, 0);
-  assert.equal(parsed[0].amountSource, "H");
+  assert.equal(parsed[0].amount, 1200);
+  assert.equal(parsed[0].amountSource, "F");
+});
+
+test("zero yen and yen refunds take priority over foreign amounts", () => {
+  const parsed = parseAmexRows([
+    ...meta,
+    ["", "", "SHOP", "CHIHARU SATO", "", 0, "", 50],
+    ["", "", "REFUND", "CHIHARU SATO", "", "(1,200)", "", -8],
+  ]);
+  assert.deepEqual(parsed.map((row) => [row.amount, row.amountSource]), [[0, "F"], [-1200, "F"]]);
+  assert.equal(sumIncludedSettlementAmount(parsed), -1200);
+  assert.equal(sumAmexStatementAmount(parsed), -1200);
+});
+
+test("H is only a fallback when billed yen is missing", () => {
+  const parsed = parseAmexRows([
+    ...meta,
+    ["", "", "SHOP", "CHIHARU SATO", "", null, "", 800],
+    ["", "", "SHOP", "CHIHARU SATO", "", "", "", 0],
+  ]);
+  assert.deepEqual(parsed.map((row) => [row.amount, row.amountSource]), [[800, "H"], [0, "H"]]);
 });
 
 test("personal cash flow uses every Amex statement line except previous transfer", () => {
@@ -84,8 +105,8 @@ test("day filter keeps only matching Amex rows and sums included settlement amou
   const july12 = filterTransactionsByIsoDate(parsed, "2026-07-12");
   assert.equal(july12.length, 2);
   assert.deepEqual(july12.map((row) => row.description), ["BISTRO AO", "PERSONAL SHOP"]);
-  assert.equal(sumIncludedSettlementAmount(july12), 6200);
-  assert.equal(sumIncludedSettlementAmount(parsed), 22680);
+  assert.equal(sumIncludedSettlementAmount(july12), 6800);
+  assert.equal(sumIncludedSettlementAmount(parsed), 23280);
   assert.equal(filterTransactionsByIsoDate(parsed, null).length, 4);
   assert.equal(filterTransactionsByIsoDate(parsed, "").length, 4);
 });
@@ -100,7 +121,7 @@ test("day filter matches any selected day and sums included amounts once", () =>
   ]);
   const selected = filterTransactionsByIsoDate(parsed, ["2026-07-04", "2026-07-12", "2026-07-12"]);
   assert.deepEqual(selected.map((row) => row.description), ["FRESH MARKET", "BISTRO AO", "PERSONAL SHOP"]);
-  assert.equal(sumIncludedSettlementAmount(selected), 18840);
+  assert.equal(sumIncludedSettlementAmount(selected), 19440);
   assert.equal(filterTransactionsByIsoDate(parsed, []).length, 4);
 });
 
@@ -122,7 +143,7 @@ test("inclusive date range swaps reversed bounds and sums included amounts", () 
 
   const swapped = filterTransactionsByIsoDateRange(parsed, "2026-07-12", "2026-07-04");
   assert.equal(swapped.length, 4);
-  assert.equal(sumIncludedSettlementAmount(swapped), 22680);
+  assert.equal(sumIncludedSettlementAmount(swapped), 23280);
   assert.equal(filterTransactionsByIsoDateRange(parsed, null, null).length, 4);
 });
 

@@ -1107,7 +1107,7 @@ export default function Home() {
               <div><span>対象明細</span><strong>{includedCount}件</strong></div>
               <div><span>自動除外</span><strong>{excludedCount}件</strong></div>
               <div><span>開始行</span><strong>8行目</strong></div>
-              <div><span>金額優先</span><strong>H列 → F列</strong></div>
+              <div><span>金額優先</span><strong>F列（日本円） → H列</strong></div>
             </section>
 
             <section className="work-grid">
@@ -1141,7 +1141,7 @@ export default function Home() {
                     <li>D列が「CHIHARU SATO」なら対象</li>
                     <li>C列に「ETC」があれば名義に関係なく対象</li>
                     <li>「前回分口座振替金額」は必ず除外</li>
-                    <li>H列に値があればF列より優先</li>
+                    <li>外貨の値があってもF列（日本円）を優先</li>
                   </ol>
                 </div>
 

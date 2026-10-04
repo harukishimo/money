@@ -192,8 +192,9 @@ export function parseAmexRows(rows: unknown[][]): AmexTransaction[] {
     const cardholder = normalize(row[3]);
     const amountF = parseMoney(row[5]);
     const amountH = parseMoney(row[7]);
-    const amountSource: AmountSource = amountH !== null ? "H" : "F";
-    const amount = amountH !== null ? amountH : (amountF ?? 0);
+    // Prefer the billed Japanese-yen amount, including zero and refunds.
+    const amountSource: AmountSource = amountF !== null || amountH === null ? "F" : "H";
+    const amount = amountF ?? amountH ?? 0;
 
     if (!date && !description && !cardholder && amountF === null && amountH === null) return [];
 
