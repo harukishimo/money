@@ -184,41 +184,7 @@ export function amexTargetRemaining(target: number | null | undefined, includedA
   return { target, remaining, overBudget: remaining < 0 };
 }
 
-function excelColumnName(index: number): string {
-  let name = "";
-  for (let value = index + 1; value > 0; value = Math.floor((value - 1) / 26)) {
-    name = String.fromCharCode(65 + (value - 1) % 26) + name;
-  }
-  return name;
-}
-
-function yenAmountColumn(rows: unknown[][]): number {
-  for (const row of rows.slice(0, 7).toReversed()) {
-    const candidates = row.flatMap((cell, index) => {
-      const label = normalizeForMatch(cell).replace(/\s/g, "");
-      if (!/(金額|AMOUNT)/.test(label)) return [];
-      if (/(外貨|現地|FOREIGN|ORIGINAL|USD|EUR|GBP)/.test(label)) return [];
-      const rank = /(日本円|円換算|JPY|YEN|金額[（(]円[）)]|円貨)/.test(label) ? 3
-        : /(請求|BILLED|BILLING)/.test(label) ? 2
-        : /^(金額|ご利用金額|利用金額|AMOUNT)$/.test(label) ? 1 : 0;
-      return rank > 0 ? [{ index, rank }] : [];
-    });
-    if (candidates.length) {
-      const highest = Math.max(...candidates.map((candidate) => candidate.rank));
-      const matches = candidates.filter((candidate) => candidate.rank === highest);
-      if (matches.length !== 1) throw new Error("日本円の請求金額の列を一意に判定できません。明細の列見出しを確認してください。");
-      return matches[0].index;
-    }
-    if (row.some((cell) => /(外貨|現地通貨|FOREIGN.*AMOUNT)/.test(normalizeForMatch(cell)))) {
-      throw new Error("日本円の請求金額の列が見つかりません。外貨金額は取り込めません。");
-    }
-  }
-  // Legacy statements without recognizable headings used F for billed yen.
-  return 5;
-}
-
 export function parseAmexRows(rows: unknown[][]): AmexTransaction[] {
-  const yenColumn = yenAmountColumn(rows);
   return rows.slice(7).flatMap((row, index) => {
     const rowNumber = index + 8;
     const date = displayDate(row[0]);
@@ -226,8 +192,9 @@ export function parseAmexRows(rows: unknown[][]): AmexTransaction[] {
     const cardholder = normalize(row[3]);
     const amountF = parseMoney(row[5]);
     const amountH = parseMoney(row[7]);
-    const yenAmount = parseMoney(row[yenColumn]);
-    const amountSource = excelColumnName(yenColumn);
+    // Amex F is the billed yen amount; H must not override it.
+    const yenAmount = amountF;
+    const amountSource = "F";
     const amount = yenAmount ?? 0;
 
     if (!date && !description && !cardholder && amountF === null && amountH === null && yenAmount === null) return [];

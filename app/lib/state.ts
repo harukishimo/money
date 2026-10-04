@@ -172,7 +172,12 @@ export function parseHouseholdState(value: unknown): HouseholdState | null {
   if (chamShareRate === false) return null;
 
   return {
-    records: value.records,
+    // Recalculate older imports that used H, retaining manual inclusion and IDs.
+    records: value.records.map((record) => record.amountF === null ? record : {
+      ...record,
+      amount: record.amountF,
+      amountSource: "F",
+    }),
     manualExpenses: value.manualExpenses,
     simulation: value.simulation,
     lifePlan,
