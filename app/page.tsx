@@ -1107,7 +1107,7 @@ export default function Home() {
               <div><span>対象明細</span><strong>{includedCount}件</strong></div>
               <div><span>自動除外</span><strong>{excludedCount}件</strong></div>
               <div><span>開始行</span><strong>8行目</strong></div>
-              <div><span>金額優先</span><strong>F列（日本円） → H列</strong></div>
+              <div><span>金額優先</span><strong>日本円の請求金額</strong></div>
             </section>
 
             <section className="work-grid">
@@ -1141,7 +1141,7 @@ export default function Home() {
                     <li>D列が「CHIHARU SATO」なら対象</li>
                     <li>C列に「ETC」があれば名義に関係なく対象</li>
                     <li>「前回分口座振替金額」は必ず除外</li>
-                    <li>外貨の値があってもF列（日本円）を優先</li>
+                    <li>列見出しから日本円の請求金額を採用（外貨は使いません）</li>
                   </ol>
                 </div>
 
@@ -1182,7 +1182,7 @@ export default function Home() {
                           </td>
                           <td className="number">
                             <strong>{formatYen(record.amount)}</strong>
-                            <small>{record.amountSource === "H" ? "H列を採用" : "F列を採用"}</small>
+                            <small>{`${record.amountSource}列を採用`}</small>
                           </td>
                         </tr>
                       ))}

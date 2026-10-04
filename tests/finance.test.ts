@@ -52,13 +52,46 @@ test("zero yen and yen refunds take priority over foreign amounts", () => {
   assert.equal(sumAmexStatementAmount(parsed), -1200);
 });
 
-test("H is only a fallback when billed yen is missing", () => {
+function statementWithHeaders(headers: unknown[]) {
+  return [...Array.from({ length: 6 }, () => []), headers];
+}
+
+test("yen amount is selected by heading even when it moves to H", () => {
   const parsed = parseAmexRows([
-    ...meta,
-    ["", "", "SHOP", "CHIHARU SATO", "", null, "", 800],
-    ["", "", "SHOP", "CHIHARU SATO", "", "", "", 0],
+    ...statementWithHeaders(["利用日", "", "内容", "名義", "", "外貨利用金額", "", "請求金額（日本円）"]),
+    ["2026/08/01", "", "SHOP", "CHIHARU SATO", "", 8, "", 1200],
+    ["2026/08/02", "", "REFUND", "CHIHARU SATO", "", -8, "", -1200],
+    ["2026/08/03", "", "SHOP", "CHIHARU SATO", "", 8, "", 0],
   ]);
-  assert.deepEqual(parsed.map((row) => [row.amount, row.amountSource]), [[800, "H"], [0, "H"]]);
+  assert.deepEqual(parsed.map((row) => [row.amount, row.amountSource]), [[1200, "H"], [-1200, "H"], [0, "H"]]);
+});
+
+test("Amex amount heading uses yen while foreign amount is ignored", () => {
+  const parsed = parseAmexRows([
+    ...statementWithHeaders(["利用日", "", "内容", "名義", "", "金額", "", "外貨利用金額"]),
+    ["", "", "SHOP", "CHIHARU SATO", "", "￥1,200", "", 8],
+  ]);
+  assert.equal(parsed[0].amount, 1200);
+  assert.equal(parsed[0].amountSource, "F");
+});
+
+test("yen column can be outside F and H", () => {
+  const parsed = parseAmexRows([
+    ...statementWithHeaders(["利用日", "", "内容", "名義", "", "外貨利用金額", "", "", "Amount (JPY)"]),
+    ["", "", "SHOP", "CHIHARU SATO", "", 8, "", "", 1200],
+  ]);
+  assert.equal(parsed[0].amount, 1200);
+  assert.equal(parsed[0].amountSource, "I");
+});
+
+test("missing yen never falls back to a foreign amount", () => {
+  assert.throws(() => parseAmexRows([
+    ...statementWithHeaders(["利用日", "", "内容", "名義", "", "金額", "", "外貨利用金額"]),
+    ["", "", "SHOP", "CHIHARU SATO", "", null, "", 800],
+  ]), /外貨金額は代わりに採用できません/);
+  assert.throws(() => parseAmexRows([
+    ...statementWithHeaders(["", "", "", "", "", "外貨利用金額"]),
+  ]), /日本円の請求金額の列が見つかりません/);
 });
 
 test("personal cash flow uses every Amex statement line except previous transfer", () => {

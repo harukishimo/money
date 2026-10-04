@@ -118,7 +118,7 @@ function isTransaction(value: unknown): value is AmexTransaction {
     && isNullableFiniteNumber(value.amountF)
     && isNullableFiniteNumber(value.amountH)
     && isFiniteNumber(value.amount)
-    && (value.amountSource === "F" || value.amountSource === "H")
+    && (typeof value.amountSource === "string" && /^[A-Z]{1,3}$/.test(value.amountSource))
     && ["name", "etc", "transfer", "other"].includes(String(value.reason))
     && typeof value.reasonLabel === "string"
     && typeof value.included === "boolean"

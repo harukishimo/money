@@ -41,6 +41,17 @@ const state = {
   fileName: "statement.xlsx",
 };
 
+test("statement amount source survives storage when yen is outside F and H", () => {
+  const records = parseAmexRows([
+    ...Array.from({ length: 6 }, () => []),
+    ["", "", "", "", "", "外貨利用金額", "", "", "請求金額（日本円）"],
+    ["2026/08/01", "", "SHOP", "CHIHARU SATO", "", 8, "", "", 1200],
+  ]);
+  const restored = parseHouseholdState(JSON.parse(JSON.stringify({ ...state, records })));
+  assert.equal(restored?.records[0].amountSource, "I");
+  assert.equal(restored?.records[0].amount, 1200);
+});
+
 test("household state validates persisted financial inputs", () => {
   const parsed = parseHouseholdState(state);
   assert.ok(parsed);
