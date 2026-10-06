@@ -57,7 +57,6 @@ export interface PersonalFinanceResult {
   personalExpenseAmount: number;
   otherAmount: number;
   mainAccountBalance: number;
-  mainAccountBaseBalance: number;
   monthlyCashflow: number;
   remainingMoney: number;
   accountTotal: number;
@@ -221,12 +220,7 @@ export function calculatePersonalFinance(
   const accountTotal = state.accounts.reduce((sum, account) => sum + account.balance, 0);
   const mainAccount = state.accounts.find((account) => account.id === state.mainAccountId);
   const mainAccountBalance = mainAccount?.balance ?? 0;
-  const mainAccountBaseBalance = mainAccount
-    ? mainAccountBalance - state.monthlySalary - month.claimAmount
-    : 0;
-  const remainingMoney = mainAccount
-    ? mainAccountBaseBalance + state.monthlySalary + month.claimAmount - month.amexStatementAmount - otherAmount
-    : monthlyCashflow;
+  const remainingMoney = mainAccountBalance + monthlyCashflow;
   const investmentValue = state.investments.reduce((sum, investment) => sum + investment.valuation, 0);
   const accountTotalExcludingMain = mainAccount ? accountTotal - mainAccountBalance : accountTotal;
   const availableCash = accountTotalExcludingMain + remainingMoney;
@@ -240,7 +234,7 @@ export function calculatePersonalFinance(
     return {
       monthKey,
       label: formatMonthLabel(monthKey),
-      estimatedAssets: totalAssets + remainingMoney * monthNumber,
+      estimatedAssets: totalAssets + monthlyCashflow * monthNumber,
     };
   });
 
@@ -252,7 +246,6 @@ export function calculatePersonalFinance(
     personalExpenseAmount,
     otherAmount,
     mainAccountBalance,
-    mainAccountBaseBalance,
     monthlyCashflow,
     remainingMoney,
     accountTotal,

@@ -25,17 +25,16 @@ test("personal assets calculate remaining money and total assets", () => {
     otherAmount: 60000,
   });
   assert.equal(result.mainAccountBalance, 500000);
-  assert.equal(result.mainAccountBaseBalance, 150000);
   assert.equal(result.monthlyCashflow, 41290);
-  assert.equal(result.remainingMoney, 191290);
+  assert.equal(result.remainingMoney, 541290);
   assert.equal(result.accountTotal, 500000);
   assert.equal(result.investmentValue, 110000);
-  assert.equal(result.totalAssets, 301290);
-  assert.equal(result.investableAmount, 91000);
-  assert.equal(result.incomeGainBudget, 72000);
-  assert.equal(result.capitalGainBudget, 19000);
-  assert.equal(result.monthlyProjection[0].estimatedAssets, 492580);
-  assert.equal(result.monthlyProjection[1].estimatedAssets, 683870);
+  assert.equal(result.totalAssets, 651290);
+  assert.equal(result.investableAmount, 441000);
+  assert.equal(result.incomeGainBudget, 352000);
+  assert.equal(result.capitalGainBudget, 89000);
+  assert.equal(result.monthlyProjection[0].estimatedAssets, 692580);
+  assert.equal(result.monthlyProjection[1].estimatedAssets, 733870);
 });
 
 test("personal asset state rejects invalid private data", () => {
@@ -90,6 +89,44 @@ test("reserve target is editable as a shared setting and changes investable amou
   };
   const defaultReserve = calculatePersonalFinance(parsed, month);
   const customReserve = calculatePersonalFinance({ ...parsed, reserveTarget: 250000 }, month);
-  assert.equal(defaultReserve.investableAmount, 91000);
-  assert.equal(customReserve.investableAmount, 0);
+  assert.equal(defaultReserve.investableAmount, 441000);
+  assert.equal(customReserve.investableAmount, 291000);
+});
+
+
+test("screenshot regression: adding 50000 yen reduces the cash shortfall by 50000", () => {
+  const base = {
+    ...state,
+    monthlySalary: 453981,
+    reserveTarget: 0,
+    accounts: [],
+    mainAccountId: null,
+    investments: [{ id: "fund", name: "投資", valuation: 302305, profitLossRate: 0 }],
+    personalExpenses: [{ id: "personal", monthKey: "2026-09", label: "個人支出", amount: 21000 }],
+  };
+  const month = { monthKey: "2026-09", claimAmount: 114716, amexStatementAmount: 386756, otherAmount: 284264 };
+  const empty = calculatePersonalFinance(base, month);
+  const funded = calculatePersonalFinance({ ...base, accounts: [{ id: "bank", name: "rakuten", balance: 50000 }], mainAccountId: "bank" }, month);
+  assert.equal(empty.remainingMoney, -123323);
+  assert.equal(funded.remainingMoney, -73323);
+  assert.equal(funded.remainingMoney - empty.remainingMoney, 50000);
+  assert.equal(funded.totalAssets, 228982);
+  assert.equal(funded.totalAssets - empty.totalAssets, 50000);
+  assert.equal(funded.monthlyProjection[0].estimatedAssets, 105659);
+  assert.equal(funded.monthlyProjection[1].estimatedAssets, -17664);
+});
+
+test("main account selection never changes total assets or counts balances twice", () => {
+  const month = { monthKey: "2026-07", claimAmount: 50000, amexStatementAmount: 228710, otherAmount: 60000 };
+  const accounts = [{ id: "bank", name: "生活口座", balance: 500000 }, { id: "other", name: "貯蓄", balance: 200000 }];
+  const noMain = calculatePersonalFinance({ ...state, accounts, mainAccountId: null }, month);
+  const bankMain = calculatePersonalFinance({ ...state, accounts, mainAccountId: "bank" }, month);
+  const otherMain = calculatePersonalFinance({ ...state, accounts, mainAccountId: "other" }, month);
+  for (const result of [bankMain, otherMain]) {
+    assert.equal(result.totalAssets, noMain.totalAssets);
+    assert.equal(result.investableAmount, noMain.investableAmount);
+    assert.deepEqual(result.monthlyProjection, noMain.monthlyProjection);
+  }
+  const zeroMain = calculatePersonalFinance({ ...state, accounts: [{ id: "bank", name: "生活口座", balance: 0 }] }, month);
+  assert.equal(zeroMain.remainingMoney, noMain.monthlyCashflow);
 });

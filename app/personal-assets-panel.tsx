@@ -140,7 +140,7 @@ export default function PersonalAssetsPanel({
 
           <details open>
             <summary>口座残高・メイン口座</summary>
-            <p className="detail-note">メイン口座を1つ選ぶと、給料・請求額を除いた残高と当月の残額を計算します。</p>
+            <p className="detail-note">給与・請求額の入金前の残高を入力してください。メイン口座の残高に当月の収支を加えて、残るお金を計算します。</p>
             <div className="personal-form-row">
               <input value={accountForm.name} placeholder="口座名" onChange={(event) => setAccountForm({ ...accountForm, name: event.target.value })} />
               <input inputMode="numeric" value={accountForm.balance} placeholder="残高" onChange={(event) => setAccountForm({ ...accountForm, balance: event.target.value })} />
@@ -208,10 +208,10 @@ export default function PersonalAssetsPanel({
             <p className="section-number">02 / MONTHLY CASH FLOW</p>
             <h2>今月、残るお金</h2>
             <strong className={result.remainingMoney < 0 ? "personal-negative" : ""}>{formatYen(result.remainingMoney)}</strong>
-            <p>（メイン口座の基礎残高 {formatYen(result.mainAccountBaseBalance)} ＋ 自分の給料 {formatYen(result.salary)} ＋ 請求額 {formatYen(result.claimAmount)}）− Amex全明細 {formatYen(result.amexStatementAmount)} − その他 {formatYen(result.otherAmount)}</p>
+            <p>（メイン口座残高 {formatYen(result.mainAccountBalance)} ＋ 自分の給料 {formatYen(result.salary)} ＋ 請求額 {formatYen(result.claimAmount)}）− Amex全明細 {formatYen(result.amexStatementAmount)} − その他 {formatYen(result.otherAmount)}</p>
             <div className="personal-cashflow-breakdown">
               <div><span>メイン口座全額</span><strong>{formatYen(result.mainAccountBalance)}</strong></div>
-              <div><span>給料・請求額を除いた残高</span><strong>{formatYen(result.mainAccountBaseBalance)}</strong></div>
+              <div><span>当月の収支（収入 − 支出）</span><strong>{formatYen(result.monthlyCashflow)}</strong></div>
               <div><span>共有費用</span><strong>{formatYen(result.sharedOtherAmount)}</strong></div>
               <div><span>個人支出</span><strong>{formatYen(result.personalExpenseAmount)}</strong></div>
               <div><span>対象月</span><strong>{formatMonthLabel(selectedMonth)}</strong></div>
@@ -247,7 +247,7 @@ export default function PersonalAssetsPanel({
           </div>
 
           <div className="personal-forecast-card">
-            <div className="section-heading compact"><div><p className="section-number">05</p><h2>今後12か月の貯まり具合</h2></div><span>選択月の残額が続く前提</span></div>
+            <div className="section-heading compact"><div><p className="section-number">05</p><h2>今後12か月の貯まり具合</h2></div><span>選択月の収支が続く前提</span></div>
             <div className="personal-forecast-list">
               {result.monthlyProjection.map((row) => (
                 <div className={row.estimatedAssets < 0 ? "personal-forecast-row negative" : "personal-forecast-row"} key={row.monthKey}>
